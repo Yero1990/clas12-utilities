@@ -35,10 +35,13 @@ do
 done
 
 rm -f du.txt du2.txt perms.txt perms2.txt
-du -s /work/clas12/* /work/clas12/users/* 2> perms.txt 1> du.txt
+du -s /work/clas12/* 2> perms.txt 1> du.txt
+du -s /work/clas12/users/* 2> permsA.txt 1> duA.txt
+cat duA.txt >> du.txt
 awk -F'[‘’]' '{print$2}' ./perms.txt > perms2.txt
 sort -r -n du.txt | awk '{printf"%12s %s\n",$1,$2}' > du2.txt
 mv -f du2.txt du.txt
+rm -f duA.txt permsA.txt
 echo 'These private directories occupy an unknown amount of disk space:' > perms.txt
 echo '   ("chgrp clas12" and "chmod -R g+r" to fix it)' >> perms.txt
 echo >> perms.txt
