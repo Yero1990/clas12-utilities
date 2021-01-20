@@ -1,4 +1,6 @@
-import subprocess
+import requests
+from datetime import datetime
+from operator import attrgetter
 
 class MyaPv:
   def __init__(self,name,deadband=None):
@@ -13,10 +15,12 @@ class MyaPv:
       return self.name+','+str(self.deadband)
 
 class MyaDatum:
-  def __init__(self,date,time):
-    self.date=date
-    self.time=time
+  def __init__(self,datetime_str):
+    self.datetime = datetime.strptime(datetime_str, "%Y-%m-%dT%H:%M:%S") 
+    self.date = self.datetime.strftime("%Y-%m-%d")
+    self.time = self.datetime.strftime("%H:%M")
     self.pvs={}
+
   def addPv(self,name,value):
     self.pvs[name]=value
   def getValue(self,name):
@@ -32,25 +36,42 @@ class MyaData:
     self.pvs=[]
     self.start='-1w'
     self.end='0'
+    self.url = 'https://myaweb.acc.jlab.org/myquery/interval'
     if start is not None:
       self.start=str(start)
     if end is not None:
       self.end=str(end)
+
   def addPv(self,name,deadband=None):
     self.pvs.append(MyaPv(name,deadband))
+
   def setStart(self,start):
     self.start=str(start)
+
   def setEnd(self,end):
     self.end=str(end)
-  def get(self):
-    cmd=['myData','-b',self.start,'-e',self.end,'-i']
-    cmd.extend([pv.getMyaDataArg() for pv in self.pvs])
-    for line in subprocess.check_output(cmd).splitlines():
-      columns=line.strip().split()
-      if len(columns) == 2+len(self.pvs):
-        date,time=columns[0],columns[1]
-        md=MyaDatum(date,time)
-        for ii in range(2,len(columns)):
-          md.addPv(self.pvs[ii-2].name,columns[ii])
-        yield(md)
 
+  def get(self):
+    data=[]
+
+    for pv in self.pvs:
+      params = {
+        'b': self.start,
+        'e': self.end,
+        'c': pv.name
+      }
+
+      # send get request to API for specific pv/channel
+      query = requests.get(self.url, params=params)
+
+      # iterate over the data in request, add a myadatum
+      print(params['c'])
+      for item in query.json()['data']:
+        timestamp = item['d']
+        value = item['v']
+        md=MyaDatum(timestamp)
+        md.addPv(pv, value)  # could add the validation here
+        data.append(md)
+    
+    data_sorted = sorted(data, key=attrgetter('datetime'))
+    return data_sorted
