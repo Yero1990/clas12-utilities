@@ -18,7 +18,7 @@ class MyaDatum:
   def __init__(self,datetime_str):
     self.datetime = datetime.strptime(datetime_str, "%Y-%m-%dT%H:%M:%S") 
     self.date = self.datetime.strftime("%Y-%m-%d")
-    self.time = self.datetime.strftime("%H:%M")
+    self.time = self.datetime.strftime("%H:%M:%S")
     self.pvs={}
 
   def addPv(self,name,value):
@@ -70,7 +70,7 @@ class MyaData:
         timestamp = item['d']
         value = item['v']
         md=MyaDatum(timestamp)
-        md.addPv(pv, value)  # could add the validation here
+        md.addPv(pv.name, value)  # could add the validation here
         data.append(md)
     
     data_sorted = sorted(data, key=attrgetter('datetime'))
