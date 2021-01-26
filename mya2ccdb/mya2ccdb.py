@@ -74,14 +74,6 @@ for myaDatum in myaData.get():
   current = MyaFcup(myaDatum)
 
   # if data invalid, assume it's the same as the previous:
-  if current.atten is None:
-    if current.stopper is not None:
-      if previous is not None and args.i:
-        current.energy = previous.energy
-      else:
-        badEnergies.add((current.run,current.energy))
-    if previous is not None:
-      current.atten = previous.atten
   if previous is not None:
     if current.run is None:
       current.run = previous.run
@@ -91,6 +83,12 @@ for myaDatum in myaData.get():
       current.slm_offset = previous.slm_offset
     if current.offset is None:
       current.offset = previous.offset
+    if current.energy is None:
+      current.energy = previous.energy
+    if current.stopper is None:
+      current.stopper = previous.stopper
+    if current.atten is None:
+      current.atten = previous.atten
 
   # for HWP, only check if run number changed:
   if previous is None or current.run != previous.run:
