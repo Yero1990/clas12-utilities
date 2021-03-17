@@ -19,7 +19,7 @@ touch log
 echo "STARTING ..." >> log
 date >> log
 
-for xx in rg-a rg-b rg-k users
+for xx in rg-a rg-b rg-k rg-f users
 do
     indir=/work/clas12
     if [ $xx == "users" ]
