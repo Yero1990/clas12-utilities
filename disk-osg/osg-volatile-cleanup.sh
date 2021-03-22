@@ -1,5 +1,9 @@
 #!/bin/bash
 
+echo NO
+exit
+
+
 ##############################################
 
 path=/volatile/clas12/osg
