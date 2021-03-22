@@ -1,0 +1,24 @@
+
+# These need a newer rsync version to work:
+**/log/
+**/lund_dir/
+**/output/simu_*/nodeScript.sh
+
+condorSubmissionError.txt
+clas12.condor
+condor_exec.exe
+
+*.evio
+*.dat
+
+*.gcard
+*.yaml
+
+*.log
+*.out
+*.err
+*.stderr
+*.stdout
+*.txt
+*.sh
+
