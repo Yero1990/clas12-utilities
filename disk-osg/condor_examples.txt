@@ -1,0 +1,2 @@
+condor_history -completedsince 1616450000 -af:j clusterId ExitStatus -backwards
+condor_qedit 3470168 on_exit_remove TRUE
