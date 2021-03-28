@@ -190,7 +190,6 @@ if [ -s $tmpfile ]; then
   [ $? -ne 0 ] && echo "$errmsg find nodeScript failed, aborting." | $tee && exit 7
 
   if [ -s $tmpfile ]; then
-    cat $tmpfile >> $logfile
     rsync -a -R --files-from=$tmpfile $rsync_opts $src $dest 2>&1 | $tee
     [ $? -ne 0 ] && echo "$errmsg rsync nodeScript failed, aborting." | $tee && exit 8
   fi
@@ -198,6 +197,9 @@ if [ -s $tmpfile ]; then
 else
   echo "$infomsg No Files to Transfer." >> $logfile
 fi
+
+# zero core dumps:
+find . -type f -cmin +$rsync_minutes -name 'core.*' -exec truncate -s 0 {} \;
 
 popd > /dev/null
 
