@@ -9,7 +9,7 @@ import collections
 cli = argparse.ArgumentParser()
 cli.add_argument('-q', default=False, action='store_true', help='use condor_q instead of condor_history')
 cli.add_argument('-days', default=1, type=int, help='# days to look back (default=1)')
-cli.add_argument('-id', default=None, type=str, help='cluster id')
+cli.add_argument('-condor', default=None, type=str, help='condor cluster id')
 args = cli.parse_args(sys.argv[1:])
 
 # calculate start time:
@@ -44,14 +44,14 @@ cmd_index = list(attributes.keys()).index('Cmd')+1
 args_index = list(attributes.keys()).index('Args')+1
 
 # run condor_history:
-if args.id is not None:
-  constraint = args.id
+if args.condor is not None:
+  constraint = args.condor
 else:
   constraint = 'gemc'
 if args.q:
   cmd=['condor_q',constraint,'-af:j']
 else:
-  cmd=['condor_history',constraint,'-backwards','-af:j']
+  cmd=['condor_history',constraint,'-backwards','-completedsince',start,'-af:j']
 cmd.extend(attributes.keys())
 proc = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,universal_newlines=True)
 
@@ -70,7 +70,9 @@ for line in iter(proc.stdout.readline, ''):
         if cols[i+1] == '0':
           cols[i+1] = 'n/a'
         else:
-          cols[i+1] = datetime.datetime.utcfromtimestamp(int(cols[i+1]))
+          # not sure about locale on timestamp:
+          cols[i+1] = datetime.datetime.fromtimestamp(int(cols[i+1]))
+          #cols[i+1] = datetime.datetime.utcfromtimestamp(int(cols[i+1]))
           cols[i+1] = cols[i+1].strftime('%m/%d %H:%M')
 
     # shorten the command name:    
@@ -83,7 +85,7 @@ for line in iter(proc.stdout.readline, ''):
     cols[args_index] = ' '.join(args)
 
     print(fmt % tuple(cols))
-    
+
 proc.wait()
 
 print(fmt % tuple(header))
