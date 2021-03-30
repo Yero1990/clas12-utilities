@@ -7,8 +7,9 @@ import subprocess
 import collections
 
 cli = argparse.ArgumentParser()
+cli.add_argument('-q', default=False, action='store_true', help='use condor_q instead of condor_history')
 cli.add_argument('-days', default=1, type=int, help='# days to look back (default=1)')
-cli.add_argument('-id', default='', type=str, help='cluster id')
+cli.add_argument('-id', default=None, type=str, help='cluster id')
 args = cli.parse_args(sys.argv[1:])
 
 # calculate start time:
@@ -27,7 +28,7 @@ attributes['CompletionDate'] = ['end',12]
 attributes['Cmd'] = ['cmd',20]
 attributes['Args'] = ['args',50]
 # not useful:
-#attributes['ExitSignal']
+#attributes['ExitSignal'] = ['sig',5]
 #attributes['NumRestarts']
 #attributes['MachineAttrMachine0']
 
@@ -43,7 +44,14 @@ cmd_index = list(attributes.keys()).index('Cmd')+1
 args_index = list(attributes.keys()).index('Args')+1
 
 # run condor_history:
-cmd=['condor_history','gemc',args.id,'-backwards','-af:j']
+if args.id is not None:
+  constraint = args.id
+else:
+  constraint = 'gemc'
+if args.q:
+  cmd=['condor_q',constraint,'-af:j']
+else:
+  cmd=['condor_history',constraint,'-backwards','-af:j']
 cmd.extend(attributes.keys())
 proc = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,universal_newlines=True)
 
@@ -59,8 +67,11 @@ for line in iter(proc.stdout.readline, ''):
     # make human-readable dates:
     for i,x in enumerate(attributes.keys()):
       if x.endswith('Date'):
-        cols[i+1] = datetime.datetime.utcfromtimestamp(int(cols[i+1]))
-        cols[i+1] = cols[i+1].strftime('%m/%d %H:%M')
+        if cols[i+1] == '0':
+          cols[i+1] = 'n/a'
+        else:
+          cols[i+1] = datetime.datetime.utcfromtimestamp(int(cols[i+1]))
+          cols[i+1] = cols[i+1].strftime('%m/%d %H:%M')
 
     # shorten the command name:    
     cmd = cols[cmd_index].split('/')
