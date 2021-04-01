@@ -185,5 +185,5 @@ if __name__ == '__main__':
         print(json.dumps(y, **json_format))
 
   if args.cvmfs and len(cvmfs_hosts) > 0:
-    print('Hosts with CVMFS errors:\n'+'\n'.join(cvmfs_hosts))
+    print('\n'.join(cvmfs_hosts))
 
