@@ -11,22 +11,77 @@ import subprocess
 json_format =  {'indent':2, 'separators':(',',': '), 'sort_keys':True}
 log_regex = '/([a-z]+)/job_([0-9]+)/log/job\.([0-9]+)\.([0-9]+)\.'
 
+cvmfs_errors=[
+  'Transport endpoint is not connected',
+  'Loaded environment state is inconsistent'
+  #'No such file or directory',
+]
+
 condor_data = None
 
-def condor_query(cluster_id):
-  '''Get the JSON for a particular job from condor_q
-  cluster_id must be fully qualified, e.g. #####.##'''
+def condor_load(constraints=[], opts=[]):
+  '''Load the JSON condor_q'''
   global condor_data
   if condor_data is None:
-    cmd = ['condor_q','gemc','-nobatch','-json']
-    condor_data = json.loads(subprocess.check_output(cmd).decode('UTF-8'))
-  for x in condor_data:
-    if 'ClusterId' in x and 'ProcId' in x:
-      if '%d.%d' % (x['ClusterId'],x['ProcId']) == cluster_id:
-        return x
-  return None
+    condor_data = {}
+    cmd = ['condor_q','gemc']
+    cmd.extend(constraints)
+    cmd.extend(opts)
+    cmd.extend(['-nobatch','-json'])
+    try:
+      tmp = json.loads(subprocess.check_output(cmd).decode('UTF-8'))
+      for x in tmp:
+        if 'ClusterId' in x and 'ProcId' in x:
+          condor_data['%d.%d'%(x['ClusterId'],x['ProcId'])] = x
+        else:
+          pass
+    except:
+      print('Error running command:  '+' '.join(cmd))
+      sys.exit(1)
+    condor_munge()
 
-def readlines_reverse(filename,max_lines):
+def condor_munge():
+  ''' Assign custom parameters based on parsing
+  some condor parameters '''
+  for condor_id,job in condor_data.items():
+    if 'UserLog' in job:
+      m = re.search(log_regex, job['UserLog'])
+      if m is not None:
+        job['user'] = m.group(1)
+        job['gemc'] = m.group(2)
+        job['condor'] = m.group(3)+'.'+m.group(4)
+        job['stderr'] = job['UserLog'][0:-4]+'.err'
+        job['stdout'] = job['UserLog'][0:-4]+'.out'
+        if condor_id != job['condor']:
+          print('WTF!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+
+def condor_match(job, args):
+  ''' Apply job constraints, on top of those condor knows about'''
+  if len(args.condor)==0:
+    if len(args.user)==0:
+      if len(args.gemc)==0:
+        return True
+  for x in args.condor:
+    if x == job['condor'] or x == job['condor'].split('.').pop(0):
+      return True
+  for x in args.user:
+    if x == job['user']:
+      return True
+  for x in args.gemc:
+    if x == job['gemc']:
+      return True
+  return False
+
+def condor_get(condor_id):
+  ret = []
+  if condor_id in condor_data:
+    ret.append(condor_data[condor_id])
+  for key,val in condor_data.items():
+    if key.split('.').pop(0) == condor_id:
+      ret.append(condor_data[key])
+  return ret
+
+def readlines_reverse(filename, max_lines):
   '''Get the trailing lines from a file, stopping
   after max_lines unless max_lines is negative'''
   n_lines = 0
@@ -51,7 +106,17 @@ def readlines_reverse(filename,max_lines):
       position -= 1
   yield line[::-1]
 
-def crawl():
+def check_cvmfs(job):
+  ''' Check for CVMFS errors in logs.  True is good, no error. '''
+  if os.path.isfile(job['stderr']):
+    with open(job['stderr'],'r',errors='replace') as f:
+      for line in f.readlines():
+        for x in cvmfs_errors:
+          if line.find(x) >= 0:
+            return False
+  return True
+
+def __crawl():
   '''Crawl the log directory, linking condor/gemc
   job ids, user names, and log files'''
   ret = {}
@@ -71,7 +136,7 @@ def crawl():
 
 if __name__ == '__main__':
 
-  cli = argparse.ArgumentParser()
+  cli = argparse.ArgumentParser('Links condor with gemc job ids and users and log files')
   cli.add_argument('-condor', default=[], metavar='# or #.#', action='append', type=str, help='limit by condor cluster id')
   cli.add_argument('-gemc', default=[], metavar='#', action='append', type=str, help='limit by gemc job id')
   cli.add_argument('-user', default=[], action='append', type=str, help='limit by user name')
@@ -79,39 +144,46 @@ if __name__ == '__main__':
   cli.add_argument('-running', default=False, action='store_true', help='limit to jobs currently in running state')
   cli.add_argument('-tail', default=None, metavar='#', type=int, help='dump last # lines of logs (all=negative, 0=just-names)')
   cli.add_argument('-json', default=False, action='store_true', help='dump JSON')
+  cli.add_argument('-cvmfs', default=False, action='store_true', help='print hostnames from logs with CVMFS errors')
 
   args = cli.parse_args(sys.argv[1:])
 
-  for condor,val in sorted(crawl().items()):
+  opts, constraints = [], []
 
-    if len(args.condor) > 0:
-      if condor not in args.condor:
-        if condor.split('.').pop(0) not in args.condor:
-          continue
+  if args.held:
+    opts.append('-hold')
+  elif args.running:
+    opts.append('-run')
 
-    if len(args.gemc) > 0 and val['gemc'] not in args.gemc:
+  constraints.extend(args.condor)
+
+  condor_load(constraints=constraints, opts=opts)
+
+  cvmfs_hosts = []
+
+  for x,y in condor_data.items():
+
+    if not condor_match(y, args):
       continue
 
-    if len(args.user) > 0 and val['user'] not in args.user:
-      continue
+    if args.cvmfs:
+      if not check_cvmfs(y):
+        if 'LastRemoteHost' in y:
+          cvmfs_hosts.append(y.get('MATCH_GLIDEIN_Site')+' '+y['LastRemoteHost']+' '+x)
 
-    if args.held or args.running:
-      if condor_query(condor) is None:
-        continue
-      if args.held and condor_query(condor).get('JobStatus') != 5:
-        continue
-      if args.running and condor_query(condor).get('JobStatus') != 2:
-        continue
+    else:
+      print('%16s %10s %12s' % (x,y['gemc'],y['user']))
 
-    print('%16s %10s %12s' % (condor,val['gemc'],val['user']))
+      if args.tail is not None:
+        for x in (y['UserLog'],y['stdout'],y['stderr']):
+          print(x)
+          if args.tail != 0:
+            print('\n'.join(readlines_reverse(x, args.tail)))
+            print()
 
-    if args.json:
-      print(json.dumps(condor_query(condor),**json_format))
+      elif args.json:
+        print(json.dumps(y, **json_format))
 
-    if args.tail is not None:
-      for x in val['logs']:
-        print(x)
-        if args.tail != 0:
-          print('\n'.join(readlines_reverse(x, args.tail)))
-          print()
+  if args.cvmfs and len(cvmfs_hosts) > 0:
+    print('Hosts with CVMFS errors:\n'+'\n'.join(cvmfs_hosts))
 
