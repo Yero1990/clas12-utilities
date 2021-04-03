@@ -6,7 +6,7 @@ cache=$HOME/cvmfs-errors.txt
 
 touch $cache
 
-$dirname/probe.py -held -cvmfs >> $cache
+$dirname/condor-probe.py -held -cvmfs >> $cache
 
 if ! [ -z $1 ]; then
     tmp=$(mktemp /tmp/gemc/cvmfs.XXXXXX)

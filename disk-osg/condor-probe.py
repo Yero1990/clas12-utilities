@@ -22,8 +22,8 @@ log_regex = '/([a-z]+)/job_([0-9]+)/log/job\.([0-9]+)\.([0-9]+)\.'
 job_states = { 0:'U', 1:'I', 2:'R', 3:'X', 4:'C', 5:'H', 6:'E' }
 cvmfs_errors=[
   'Transport endpoint is not connected',
-  'Loaded environment state is inconsistent',
-  'No such file or directory'
+  'Loaded environment state is inconsistent'
+#  'No such file or directory'
 ]
 
 ###########################################################
