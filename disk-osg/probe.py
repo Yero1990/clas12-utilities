@@ -283,7 +283,7 @@ if __name__ == '__main__':
         if x is not None and os.path.isfile(x):
           print(x)
           if args.tail != 0:
-            print('\n'.join(readlines_reverse(x, args.tail)))
+            print('\n'.join(reversed(list(readlines_reverse(x, args.tail)))))
 
     else:
       table_body.append(tabulate_row(job))
