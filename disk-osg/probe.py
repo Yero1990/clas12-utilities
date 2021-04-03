@@ -2,9 +2,9 @@
 #
 # N. Baltzell, April 2021
 #
-# Wrap condor_q and condor_history commands into one, provide additional
-# query features specific to CLAS12 jobs, provide searching logs for CVMFS
-# issues, provide printing tails of logs.
+# Wrap condor_q and condor_history commands into one, with convenenience
+# options for common uses, e.g. query criteria specific to CLAS12 jobs,
+# searching logs for CVMFS issues, and printing tails of logs.
 #
 
 import re
@@ -188,20 +188,21 @@ def __crawl():
 ###########################################################
 ###########################################################
 
-table_attributes = collections.OrderedDict()
-table_attributes['JobStatus'] = ['stat',4]
-table_attributes['ExitCode'] = ['exit',4]
-table_attributes['NumJobStarts'] = ['#',3]
-table_attributes['JobCurrentStartDate'] = ['start',12]
-table_attributes['CompletionDate'] = ['end',12]
-table_attributes['user'] = ['user',10]
-table_attributes['gemc'] = ['gemc',6]
-table_attributes['Args'] = ['args',50]
-table_format = '%-15s'
+table_columns = collections.OrderedDict()
+table_columns['MATCH_GLIDEIN_Site'] = ['site',7]
+table_columns['JobStatus'] = ['stat',4]
+table_columns['ExitCode'] = ['exit',4]
+table_columns['NumJobStarts'] = ['#',3]
+table_columns['JobCurrentStartDate'] = ['start',12]
+table_columns['CompletionDate'] = ['end',12]
+table_columns['user'] = ['user',10]
+table_columns['gemc'] = ['gemc',6]
+table_columns['Args'] = ['args',30]
+table_format = '%-14.14s'
 table_header = ['clusterid']
-for key in table_attributes.keys():
-  table_format += ' %%-%ds'%table_attributes[key][1]
-  table_header.append(table_attributes[key][0])
+for val in table_columns.values():
+  table_format += ' %%-%d.%ds'%(val[1],val[1])
+  table_header.append(val[0])
 table_header = table_format % tuple(table_header)
 
 def human_date(timestamp):
@@ -210,7 +211,7 @@ def human_date(timestamp):
 
 def tabulate_row(job):
   cols = [ '%d.%d' % (job['ClusterId'],job['ProcId']) ]
-  for att in table_attributes.keys():
+  for att in table_columns.keys():
     x = job.get(att)
     if x is None:
       x = 'n/a'
