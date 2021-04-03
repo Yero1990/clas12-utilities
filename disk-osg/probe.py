@@ -19,7 +19,7 @@ import collections
 
 json_format =  {'indent':2, 'separators':(',',': '), 'sort_keys':True}
 log_regex = '/([a-z]+)/job_([0-9]+)/log/job\.([0-9]+)\.([0-9]+)\.'
-
+job_states = { 0:'U', 1:'I', 2:'R', 3:'X', 4:'C', 5:'H', 6:'E' }
 cvmfs_errors=[
   'Transport endpoint is not connected',
   'Loaded environment state is inconsistent',
@@ -194,16 +194,13 @@ table_attributes['ExitCode'] = ['exit',4]
 table_attributes['NumJobStarts'] = ['#',3]
 table_attributes['JobCurrentStartDate'] = ['start',12]
 table_attributes['CompletionDate'] = ['end',12]
-table_attributes['Cmd'] = ['cmd',20]
+table_attributes['Cmd'] = ['gemc',20]
 table_attributes['Args'] = ['args',50]
 table_format = '%-15s'
 table_header = ['clusterid']
 for key in table_attributes.keys():
   table_format += ' %%-%ds'%table_attributes[key][1]
-  if key == 'Cmd':
-    table_header.append('gemc')
-  else:
-    table_header.append(table_attributes[key][0])
+  table_header.append(table_attributes[key][0])
 table_header = table_format % tuple(table_header)
 
 def human_date(timestamp):
@@ -223,6 +220,8 @@ def tabulate_row(job):
         x = 'n/a'
       else:
         x = human_date(x)
+    elif att == 'JobStatus':
+      x = job_states.get(x)
     elif att == 'Cmd':
       x = '/'.join(x.split('/')[5:7])
     cols.append(x)
@@ -267,8 +266,6 @@ if __name__ == '__main__':
     if not condor_match(job, args):
       continue
 
-    table_body.append(tabulate_row(job))
-
     if args.cvmfs:
       if not check_cvmfs(job):
         if 'LastRemoteHost' in job:
@@ -285,6 +282,9 @@ if __name__ == '__main__':
           print(x)
           if args.tail != 0:
             print('\n'.join(readlines_reverse(x, args.tail)))
+
+    else:
+      table_body.append(tabulate_row(job))
 
   if args.cvmfs:
     if len(cvmfs_hosts) > 0:
