@@ -232,10 +232,10 @@ def tabulate_row(job):
 
 if __name__ == '__main__':
 
-  cli = argparse.ArgumentParser('Links condor with gemc job ids and users and log files')
+  cli = argparse.ArgumentParser('Wrap condor_q and condor_history and add features for CLAS12.')
   cli.add_argument('-condor', default=[], metavar='# or #.#', action='append', type=str, help='limit by condor cluster id')
-  cli.add_argument('-gemc', default=[], metavar='#', action='append', type=str, help='limit by gemc job id')
-  cli.add_argument('-user', default=[], action='append', type=str, help='limit by user name')
+  cli.add_argument('-gemc', default=[], metavar='#', action='append', type=str, help='limit by gemc submission id')
+  cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter user name')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
   cli.add_argument('-running', default=False, action='store_true', help='limit to jobs currently in running state')
   cli.add_argument('-completed', default=False, action='store_true', help='limit to completed jobs')
