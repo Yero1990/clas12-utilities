@@ -206,7 +206,10 @@ for val in table_columns.values():
 table_header = table_format % tuple(table_header)
 
 def human_date(timestamp):
-  x = datetime.datetime.fromtimestamp(int(timestamp))
+  try:
+    x = datetime.datetime.fromtimestamp(int(timestamp))
+  except:
+    return 'n/a'
   return x.strftime('%m/%d %H:%M')
 
 def tabulate_row(job):
