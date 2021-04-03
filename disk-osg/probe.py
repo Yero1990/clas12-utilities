@@ -194,7 +194,8 @@ table_attributes['ExitCode'] = ['exit',4]
 table_attributes['NumJobStarts'] = ['#',3]
 table_attributes['JobCurrentStartDate'] = ['start',12]
 table_attributes['CompletionDate'] = ['end',12]
-table_attributes['Cmd'] = ['gemc',20]
+table_attributes['user'] = ['user',10]
+table_attributes['gemc'] = ['gemc',6]
 table_attributes['Args'] = ['args',50]
 table_format = '%-15s'
 table_header = ['clusterid']
@@ -222,8 +223,8 @@ def tabulate_row(job):
         x = human_date(x)
     elif att == 'JobStatus':
       x = job_states.get(x)
-    elif att == 'Cmd':
-      x = '/'.join(x.split('/')[5:7])
+    elif att == 'Args':
+      x = ' '.join(x.split()[1:])
     cols.append(x)
   return table_format % tuple(cols)
 
