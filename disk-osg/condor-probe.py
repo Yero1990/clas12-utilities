@@ -237,14 +237,14 @@ if __name__ == '__main__':
   cli = argparse.ArgumentParser('Wrap condor_q and condor_history and add features for CLAS12.')
   cli.add_argument('-condor', default=[], metavar='# or #.#', action='append', type=str, help='limit by condor cluster id')
   cli.add_argument('-gemc', default=[], metavar='#', action='append', type=str, help='limit by gemc submission id')
-  cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter user name')
+  cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
   cli.add_argument('-running', default=False, action='store_true', help='limit to jobs currently in running state')
   cli.add_argument('-completed', default=False, action='store_true', help='limit to completed jobs')
-  cli.add_argument('-tail', default=None, metavar='#', type=int, help='dump last # lines of logs (all=negative, 0=just-names)')
-  cli.add_argument('-json', default=False, action='store_true', help='dump JSON')
+  cli.add_argument('-days', default=0, metavar='#', type=int, help='look back # days for completed jobs (default=0)')
+  cli.add_argument('-tail', default=None, metavar='#', type=int, help='print last # lines of logs (negative=all, 0=filenames)')
+  cli.add_argument('-json', default=False, action='store_true', help='print condor\'s full data in JSON format')
   cli.add_argument('-cvmfs', default=False, action='store_true', help='print hostnames from logs with CVMFS errors')
-  cli.add_argument('-days', default=0, type=int, help='look back # days for completed jobs (default=0)')
 
   args = cli.parse_args(sys.argv[1:])
 
