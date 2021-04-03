@@ -31,11 +31,12 @@ cvmfs_errors=[
 
 condor_data = None
 
-def condor_load(constraints=[], opts=[], days=0):
+def condor_load(constraints=[], opts=[], days=0, completed=False):
   '''Load data from condor_q and condor_history'''
   global condor_data
   condor_data = {}
-  condor_q(constraints=constraints, opts=opts)
+  if not completed:
+    condor_q(constraints=constraints, opts=opts)
   if days > 0:
     condor_history(constraints=constraints, days=days)
   condor_munge()
@@ -255,7 +256,7 @@ if __name__ == '__main__':
 
   constraints.extend(args.condor)
 
-  condor_load(constraints=constraints, opts=opts, days=args.days)
+  condor_load(constraints=constraints, opts=opts, days=args.days, completed=args.completed)
 
   cvmfs_hosts = []
   table_body = []
