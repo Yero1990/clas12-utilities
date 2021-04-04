@@ -3,9 +3,10 @@
 # N. Baltzell, March 2021
 #
 # For rsyncing sufficiently old OSG data files from local scosg##
-# filesystem to final Lustre destination for users, deleting their
-# local copies upon successful transfer, and cleaning up other,
-# older local files, e.g. logs and submission files.
+# filesystem to final Lustre destination for users, and deleting
+# their local copies upon successful transfer.  A separate python
+# script is called at the end to do local filesystem cleanup to 
+# avoid excessive finds.
 #
 # Does *not* delete anything at the destination, but there should be
 # something in place to at least clean up old empty directories there.
@@ -43,9 +44,9 @@ user=gemc
 localhost=scosg16
 
 # path on $localhost to be rsync'd to $dest:
-src=/osgpool/hallb/clas12/gemc
+srcdir=/osgpool/hallb/clas12/gemc
 
-# remote destination for contents of $src:
+# remote destination for contents of $srcdir:
 remotehost=dtn1902-ib
 remotepath=/lustre19/expphy/volatile/clas12/osg2
 dest=$user@$remotehost:$remotepath
@@ -53,7 +54,7 @@ dest=$user@$remotehost:$remotepath
 # data files older than this will be rsync'd to $dest:
 rsync_minutes=60
 
-# files older than this will be deleted from $src:
+# files older than this will be deleted from $srcdir:
 delete_days=14
 
 # script name and absolute path containing this script:
@@ -61,10 +62,10 @@ scriptname=$(basename $0)
 dirname="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 
 # output files for this instance of this script:
-mkdir -p $src/transfers /tmp/gemc
+mkdir -p $srcdir/transfers /tmp/gemc
 timestamp=$(date +%Y%m%d_%H%M%S)
 tmpfile=$(mktemp /tmp/gemc/$timestamp.XXXXXX)
-logfile=$(mktemp $src/transfers/$timestamp.XXXXXX.log)
+logfile=$(mktemp $srcdir/transfers/$timestamp.XXXXXX.log)
 
 # conveneniences for logging:
 errmsg="ERROR:  $scriptname: "
@@ -116,7 +117,14 @@ function cleanup {
 }
 trap cleanup EXIT
 
-function checkssh {
+function check_duplicates {
+  if [ "$(pgrep -c -u $user -f "rsync.*$user@$remotehost")" -eq 0 ]; then
+      return 0
+  fi
+  return 1
+}
+
+function check_ssh {
   host=$1
   path=$2
   maxtries=10
@@ -151,20 +159,24 @@ function checkssh {
 [ $(hostname -s) != "$localhost" ] && echo "$errmsg Must be on $localhost." | $tee && exit 3
 
 # print warning if local disk is getting full:
-used_frac=`df $src | tail -1 | awk '{print$5}' | sed 's/%//'`
-[ "$used_frac" -gt 80 ] && echo "$warnmsg $src more than 80% full:  $used_frac%" | $tee 
+used_frac=`df $srcdir | tail -1 | awk '{print$5}' | sed 's/%//'`
+[ "$used_frac" -gt 80 ] && echo "$warnmsg $srcdir more than 80% full:  $used_frac%" | $tee 
 
 # check we can ssh to remote host and access the destination path:
-checkssh $user@$remotehost $remotepath 2&>1 >> $logfile
+check_ssh $user@$remotehost $remotepath 2&>1 >> $logfile
 [ $? -ne 0 ] && echo "$errmsg ssh $user@$remotehost failed." && exit 55
 
+# abort if already an rsync running:
+check_duplicates "rsync.*$user@$remotehost"
+[ $? -ne 0 ] && echo "$errmsg rsync $user@$remotehost already running." && exit 66 
+
 ########################################################################
-# Do the transfers from local $src to remote $dest:
+# Do the transfers from local $srcdir to remote $dest:
 ########################################################################
 
-pushd $src > /dev/null
+pushd $srcdir > /dev/null
 
-[ $(pwd) != "$src" ] && echo "$errmsg Failed to get to $src." | $tee && exit 10
+[ $(pwd) != "$srcdir" ] && echo "$errmsg Failed to get to $srcdir." | $tee && exit 10
 
 # transfer *.hipo data files older than some minutes:
 
@@ -174,12 +186,12 @@ find . -type f -cmin +$rsync_minutes -name '*.hipo' > $tmpfile 2>&1 | $tee
 if [ -s $tmpfile ]; then
 
   echo "$infomsg Files to Transfer:" >> $logfile ; cat $tmpfile >> $logfile
-  rsync -a -R --files-from=$tmpfile $rsync_opts $src $dest 2>&1 | $tee
+  rsync -a -R --files-from=$tmpfile $rsync_opts $srcdir $dest 2>&1 | $tee
   [ $? -ne 0 ] && echo "$errmsg rsync *.hipo failed, aborting." | $tee && exit 6
 
   # first rsync claimed sucess, run it again with local deletion:
   if [ $dryrun -eq 0 ]; then
-    rsync -a -R --remove-source-files --files-from=$tmpfile $rsync_opts $src $dest 2>&1 | $tee
+    rsync -a -R --remove-source-files --files-from=$tmpfile $rsync_opts $srcdir $dest 2>&1 | $tee
     [ $? -ne 0 ] && echo "$errmsg rsync *.hipo failed, aborting." | $tee && exit 6
   fi
 
@@ -190,7 +202,7 @@ if [ -s $tmpfile ]; then
   [ $? -ne 0 ] && echo "$errmsg find nodeScript failed, aborting." | $tee && exit 7
 
   if [ -s $tmpfile ]; then
-    rsync -a -R --files-from=$tmpfile $rsync_opts $src $dest 2>&1 | $tee
+    rsync -a -R --files-from=$tmpfile $rsync_opts $srcdir $dest 2>&1 | $tee
     [ $? -ne 0 ] && echo "$errmsg rsync nodeScript failed, aborting." | $tee && exit 8
   fi
 
@@ -198,32 +210,19 @@ else
   echo "$infomsg No Files to Transfer." >> $logfile
 fi
 
-# zero core dumps:
-find . -type f -cmin +$rsync_minutes -name 'core.*' -exec truncate -s 0 {} \;
-
 popd > /dev/null
 
 ########################################################################
-# Cleanup old stuff on local $src filesystem:
+# Cleanup old stuff on local $srcdir filesystem:
 ########################################################################
 
-# delete files older than some number of days:
-find $src -mindepth 1 -mtime +$delete_days -type f > $tmpfile
-if [ -s $tmpfile ]; then
-  echo "$infomsg Local Files to Delete:" >> $logfile ; cat $tmpfile >> $logfile
-  if [ $dryrun -eq 0 ]; then
-    xargs rm -f < $tmpfile 2>&1 >> $logfile
-    [ $? -ne 0 ] && echo "$errmsg delete failed (1)." | $tee
-  fi
-else
-  echo "$infomsg No Local Files to Delete." >> $logfile
-fi
-
-# delete old, empty directories:
+# minimize finds, reduce to a single crawl for deletions:
+opts="-path $srcdir -delete $delete_days -empty $delete_days -trash 2"
 if [ $dryrun -eq 0 ]; then
-  find $src -mindepth 1 -mtime +$delete_days -type d -empty -delete 2>&1 | $tee
-  [ $? -ne 0 ] && echo "$errmsg delete failed (2)." | $tee
+    opts='$opts -dryrun'
 fi
+$dirname/disk-cleanup.py $opts 2>&1 >> $logfile
+[ $? -ne 0 ] && echo "$errmsg disk-cleanup.py failed." | $tee
 
 ########################################################################
 # Done
