@@ -4,83 +4,154 @@ import re
 import os
 import sys
 import time
+import math
 import argparse
 import subprocess
 
-DEFAULT_IGNORES = ['^.*\.hipo$','^.*/job_[0-9]+/nodeScript.sh$']
+protected_dir = '/osgpool/hallb/clas12/gemc'
+default_ignores = [ '^.*\.hipo$', '^.*/job_[0-9]+/nodeScript.sh$' ]
+default_trashes = [ '.*\.root$', '.*\.evio$', '.*\.dat$', '^core\.*' ]
 
-CLI = argparse.ArgumentParser(epilog='Note, this preserves directory modification times, unlike a `find -delete`.')
-CLI.add_argument('-path', required=True, type=str, help='Path to search recursively for deletions.')
-CLI.add_argument('-days', required=True, type=int, metavar='#', help='Age threshold in days.')
-CLI.add_argument('-delete', default=False, action='store_true', help='Actually delete.  The default is just to print.')
-CLI.add_argument('-gzip', default=False, action='store_true', help='Gzip files instead of deleting or just printing.')
-CLI.add_argument('-empty', default=False, action='store_true', help='Delete empty directories, regardless their age.')
-CLI.add_argument('-noignore', default=False, action='store_true', help='Disable the -ignore option, i.e. ignore nothing.')
-CLI.add_argument('-ignore', default=[], type=str, action='append', help='Regular expressions of paths to ignore, repeatable. (default=%s)'%DEFAULT_IGNORES)
+cli = argparse.ArgumentParser(description='''Utility for filesystem cleanup.
+  Defaults values of the -ignores and -trashes options are for CLAS12 OSG cleanup.
+  Note, this preserves directory modification times, unlike a `find -delete.`
+  ''')
+cli.add_argument('-path', required=True, type=str, help='path to search recursively for deletions')
+cli.add_argument('-delete', default=math.inf, metavar='#', type=int, help='age threshold in days for file deletion (default=infinity)')
+cli.add_argument('-empty', default=math.inf, metavar='#', type=int, help='age threshold in days for empty directory deletion (default=infinity)')
+cli.add_argument('-trash', default=math.inf, metavar='#', type=int, help='age threshold in days for trash deletion (default=infinity)')
+cli.add_argument('-gzip', default=False, action='store_true', help='gzip files instead of deleting')
+cli.add_argument('-ignores', default=[], type=str, action='append', help='regular expressions of paths to ignore, repeatable (default=%s)'%default_ignores)
+cli.add_argument('-trashes', default=[], type=str, action='append', help='regular expressions of file basenames to always delete, repeatable (default=%s)'%default_trashes)
+cli.add_argument('-noignores', default=False, action='store_true', help='disable the -ignores option')
+cli.add_argument('-notrashes', default=False, action='store_true', help='disable the -trashes option')
+cli.add_argument('-dryrun', default=False, action='store_true', help='do not delete/gzip anything, just print')
 
-ARGS = CLI.parse_args(sys.argv[1:])
+args = cli.parse_args(sys.argv[1:])
 
-NOW = time.time()
+now = time.time()
 
-if len(ARGS.ignore)==0:
-  ARGS.ignore = DEFAULT_IGNORES
-elif ARGS.noignore:
-  ARGS.ignore = []
+########################################################################
+########################################################################
 
-def old(path):
-  age_days = float(NOW - os.path.getmtime(path))/60/60/24
-  return age_days > ARGS.days
+if args.delete == math.inf:
+  if args.empty == math.inf:
+    if args.trash == math.inf:
+      cli.error('At least one of -delete/empty/trash must be set.')
+      sys.exit(1)
 
-def ignore(path):
+if len(args.ignores)>0 and args.noignores:
+  cli.error('You cannot set both -noignores and -ignores.')
+
+if len(args.trashes)==0:
+  args.trashes = default_trashes
+
+if len(args.ignores)==0:
+  args.ignores = default_ignores
+
+if args.noignores:
+  args.ignores = []
+
+########################################################################
+########################################################################
+
+def is_old(path, days):
+  '''Check whether modification time is older than than a number of days'''
+  age_days = float(now - os.path.getmtime(path))/60/60/24
+  return age_days > days
+
+def is_trash(path):
+  '''Test whether it qualifies as trash'''
   ret = False
-  for x in ARGS.ignore:
+  for x in args.trashes:
+    if re.fullmatch(x, os.path.basename(path)) is not None:
+      ret = True
+      break
+  return ret
+
+def is_ignored(path):
+  '''Test whether it qualifies for being ignored'''
+  ret = False
+  for x in args.ignores:
     if re.fullmatch(x, path) is not None:
       ret = True
       break
   return ret
 
+########################################################################
+########################################################################
+
+def should_delete_file(path):
+  '''Test whether the file should be deleted'''
+  if args.trash<math.inf and is_old(path, args.trash) and is_trash(path):
+    if not args.dryrun:
+      os.remove(path)
+    return True
+  if args.delete<math.inf and is_old(path, args.delete) and not is_ignored(path):
+    if not args.dryrun:
+      if args.gzip:
+        if not path.endswith('.gz'):
+          subprocess.run(['gzip',path])
+      else:
+        os.remove(path)
+    return True
+  return False
+
+def should_delete_dir(path):
+  '''Test whether the directory should be deleted'''
+  if args.empty<math.inf and is_old(path, args.empty) and len(os.listdir(path))==0:
+    if not args.dryrun:
+      os.rmdir(path)
+    return True
+  return False
+
+########################################################################
+########################################################################
+
 # some directories may become empty along the way,
 # so we iterate until nothing gets deleted:
 while True:
-  
-  deleted = False
 
-  for dirpath,dirnames,filenames in os.walk(ARGS.path):
+  delete_happened = False
 
-    dirpath_deleted = False
+  for dirpath,dirnames,filenames in os.walk(args.path):
+
+    dir_got_modified = False
+
+    # don't delete anything at the top level within protected_dir:
+    # (this is to avoid race conditions from the OSG submit portal)
+    if dirpath == protected_dir:
+      continue
 
     # store the top directory's modification time:
     dirpath_mtime = os.path.getmtime(dirpath)
 
-    # delete old files from the top directory:
+    # deal with files:
     for filename in filenames:
       fullfilepath = dirpath+'/'+filename
-      if old(fullfilepath) and not ignore(fullfilepath):
-        print(fullfilepath)
-        if ARGS.gzip:
-          if not fullfilepath.endswith('.gz'):
-            subprocess.run(['gzip',fullfilepath])
-        elif ARGS.delete:
-          os.remove(fullfilepath)
-          deleted = True
-          dirpath_deleted = True
+      if should_delete_file(fullfilepath):
+        delete(fullfilepath)
+        print(path)
+        os.remove(path)
+        delete_happened = True
+        dir_got_modified = True
 
-    # delete empty directories from the top directory:
+    # deal with directories:
     for dirname in dirnames:
       fulldirpath = dirpath+'/'+dirname
-      if len(os.listdir(fulldirpath))==0:
-        if old(fulldirpath) or ARGS.empty:
-          print(fulldirpath)
-          if ARGS.delete:
-            os.rmdir(fulldirpath)
-            deleted = True
-            dirpath_deleted = True
+      if should_delete_dir(fulldirpath):
+        delete(fulldirpath)
+        print(path)
+        os.rmdir(path)
+        delete_happened = True
+        dir_got_modified = True
 
-    # restore the top directory's modification time:
-    if dirpath_deleted:
+    # restore the directory's modification time if we modified it:
+    if dir_got_modified:
       os.utime(dirpath, (dirpath_mtime, dirpath_mtime))
 
   # if we didn't delete anything on this iteration, stop:
-  if deleted or not ARGS.delete:
+  # (for a dryrun, we can't iterate to find empties, so also stop)
+  if not delete_happened or args.dryrun:
     break
 
