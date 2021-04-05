@@ -10,7 +10,10 @@ $dirname/condor-probe.py -held -cvmfs >> $cache
 
 if ! [ -z $1 ]; then
     tmp=$(mktemp /tmp/gemc/cvmfs.XXXXXX)
-    sed 's/@/ /' $cache | awk '{print$1,$3}' | sort | uniq -c | sort -n -r > $tmp
+    # 1. remove username, keeping only site, host, and job ids
+    # 2. sort and remove uniques, i.e. same host and job id
+    # 3. count per host
+    sed 's/@/ /g' $cache | awk '{print$1,$(NF-1),$NF}' | sort | uniq | awk '{print$1,$2}' | sort | uniq -c | sort -n -r
     if [ $(cat $tmp | wc -l) -ne 0 ]; then
         echo "Nodes with CVMFS issues in the past 24 hours:"
         cat $tmp
