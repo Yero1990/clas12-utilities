@@ -84,26 +84,14 @@ def is_ignored(path):
 def should_delete_file(path):
   '''Test whether the file should be deleted'''
   if args.trash>0 and is_old(path, args.trash) and is_trash(path):
-    if not args.dryrun:
-      os.remove(path)
     return True
   if args.delete>0 and is_old(path, args.delete) and not is_ignored(path):
-    if not args.dryrun:
-      if args.gzip:
-        if not path.endswith('.gz'):
-          subprocess.run(['gzip',path])
-      else:
-        os.remove(path)
     return True
   return False
 
 def should_delete_dir(path):
   '''Test whether the directory should be deleted'''
-  if args.empty>0 and is_old(path, args.empty) and len(os.listdir(path))==0:
-    if not args.dryrun:
-      os.rmdir(path)
-    return True
-  return False
+  return args.empty>0 and is_old(path, args.empty) and len(os.listdir(path))==0
 
 ########################################################################
 ########################################################################
@@ -133,7 +121,11 @@ while True:
       if should_delete_file(fullfilepath):
         print(fullfilepath)
         if not args.dryrun:
-          os.remove(fullfilepath)
+          if args.gzip:
+            if not path.endswith('.gz'):
+              subprocess.run(['gzip',path])
+          else:
+            os.remove(fullfilepath)
           delete_happened = True
           dir_got_modified = True
 
