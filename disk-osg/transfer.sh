@@ -218,8 +218,8 @@ popd > /dev/null
 
 # minimize finds, reduce to a single crawl for deletions:
 opts="-path $srcdir -delete $delete_days -empty $delete_days -trash 2"
-if [ $dryrun -eq 0 ]; then
-    opts='$opts -dryrun'
+if [ $dryrun -ne 0 ]; then
+    opts="$opts -dryrun"
 fi
 echo "$infomsg Files to Delete:" >> $logfile
 $dirname/disk-cleanup.py $opts 2>&1 >> $logfile
