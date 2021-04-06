@@ -17,9 +17,9 @@ cli = argparse.ArgumentParser(description='''Utility for filesystem cleanup.
   Note, this preserves directory modification times, unlike a `find -delete.`
   ''')
 cli.add_argument('-path', required=True, type=str, help='path to search recursively for deletions')
-cli.add_argument('-delete', default=math.inf, metavar='#', type=int, help='age threshold in days for file deletion (default=infinity)')
-cli.add_argument('-empty', default=math.inf, metavar='#', type=int, help='age threshold in days for empty directory deletion (default=infinity)')
-cli.add_argument('-trash', default=math.inf, metavar='#', type=int, help='age threshold in days for trash deletion (default=infinity)')
+cli.add_argument('-delete', default=-1, metavar='#', type=int, help='age threshold in days for file deletion (default=infinity)')
+cli.add_argument('-empty', default=-1, metavar='#', type=int, help='age threshold in days for empty directory deletion (default=infinity)')
+cli.add_argument('-trash', default=-1, metavar='#', type=int, help='age threshold in days for trash deletion (default=infinity)')
 cli.add_argument('-gzip', default=False, action='store_true', help='gzip files instead of deleting')
 cli.add_argument('-ignores', default=[], type=str, action='append', help='regular expressions of paths to ignore, repeatable (default=%s)'%default_ignores)
 cli.add_argument('-trashes', default=[], type=str, action='append', help='regular expressions of file basenames to always delete, repeatable (default=%s)'%default_trashes)
@@ -34,9 +34,9 @@ now = time.time()
 ########################################################################
 ########################################################################
 
-if args.delete == math.inf:
-  if args.empty == math.inf:
-    if args.trash == math.inf:
+if args.delete < 0:
+  if args.empty < 0:
+    if args.trash < 0:
       cli.error('At least one of -delete/empty/trash must be set.')
       sys.exit(1)
 
@@ -83,11 +83,11 @@ def is_ignored(path):
 
 def should_delete_file(path):
   '''Test whether the file should be deleted'''
-  if args.trash<math.inf and is_old(path, args.trash) and is_trash(path):
+  if args.trash>0 and is_old(path, args.trash) and is_trash(path):
     if not args.dryrun:
       os.remove(path)
     return True
-  if args.delete<math.inf and is_old(path, args.delete) and not is_ignored(path):
+  if args.delete>0 and is_old(path, args.delete) and not is_ignored(path):
     if not args.dryrun:
       if args.gzip:
         if not path.endswith('.gz'):
@@ -99,7 +99,7 @@ def should_delete_file(path):
 
 def should_delete_dir(path):
   '''Test whether the directory should be deleted'''
-  if args.empty<math.inf and is_old(path, args.empty) and len(os.listdir(path))==0:
+  if args.empty>0 and is_old(path, args.empty) and len(os.listdir(path))==0:
     if not args.dryrun:
       os.rmdir(path)
     return True
@@ -108,6 +108,7 @@ def should_delete_dir(path):
 ########################################################################
 ########################################################################
 
+# Finally, crawl the filesystem and do stuff:
 # some directories may become empty along the way,
 # so we iterate until nothing gets deleted:
 while True:
@@ -130,21 +131,21 @@ while True:
     for filename in filenames:
       fullfilepath = dirpath+'/'+filename
       if should_delete_file(fullfilepath):
-        delete(fullfilepath)
-        print(path)
-        os.remove(path)
-        delete_happened = True
-        dir_got_modified = True
+        print(fullfilepath)
+        if not args.dryrun:
+          os.remove(fullfilepath)
+          delete_happened = True
+          dir_got_modified = True
 
     # deal with directories:
     for dirname in dirnames:
       fulldirpath = dirpath+'/'+dirname
       if should_delete_dir(fulldirpath):
-        delete(fulldirpath)
-        print(path)
-        os.rmdir(path)
-        delete_happened = True
-        dir_got_modified = True
+        print(fulldirpath)
+        if not args.dryrun:
+          os.rmdir(fulldirpath)
+          delete_happened = True
+          dir_got_modified = True
 
     # restore the directory's modification time if we modified it:
     if dir_got_modified:
