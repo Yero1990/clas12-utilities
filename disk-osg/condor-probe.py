@@ -187,6 +187,7 @@ def check_cvmfs(job):
 
 summary_columns = collections.OrderedDict()
 summary_columns['TotalSubmitProcs'] = ['total',8]
+summary_columns['QDate'] = ['submit',12]
 summary_columns['done'] = ['done',8]
 summary_columns['run'] = ['run',8]
 summary_columns['idle'] = ['idle',8]
@@ -195,7 +196,7 @@ summary_columns['user'] = ['user',10]
 summary_columns['gemc'] = ['gemc',6]
 
 table_columns = collections.OrderedDict()
-table_columns['MATCH_GLIDEIN_Site'] = ['site',7]
+table_columns['MATCH_GLIDEIN_Site'] = ['site',10]
 table_columns['JobStatus'] = ['stat',4]
 table_columns['ExitCode'] = ['exit',4]
 table_columns['NumJobStarts'] = ['#',3]
@@ -205,7 +206,7 @@ table_columns['user'] = ['user',10]
 table_columns['gemc'] = ['gemc',6]
 table_columns['Args'] = ['args',30]
 
-summary_format = '%-14.14s'
+summary_format = '%-11.11s'
 summary_header = ['clusterid']
 for val in summary_columns.values():
   summary_format += ' %%-%d.%ds'%(val[1],val[1])
