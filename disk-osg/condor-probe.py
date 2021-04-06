@@ -22,7 +22,8 @@ log_regex = '/([a-z]+)/job_([0-9]+)/log/job\.([0-9]+)\.([0-9]+)\.'
 job_states = { 0:'U', 1:'I', 2:'R', 3:'X', 4:'C', 5:'H', 6:'E' }
 cvmfs_errors=[
   'Transport endpoint is not connected',
-  'Loaded environment state is inconsistent'
+  'Loaded environment state is inconsistent',
+  'CVMFS ERROR'
 #  'No such file or directory'
 ]
 
@@ -116,6 +117,32 @@ def condor_match(job, args):
       return True
   return False
 
+def condor_summary():
+  ret = {}
+  for condor_id,job in condor_data.items():
+    cluster_id = condor_id.split('.').pop(0)
+    if cluster_id not in ret:
+      ret[cluster_id] = job
+      ret[cluster_id]['done'] = 0
+      ret[cluster_id]['run'] = 0
+      ret[cluster_id]['idle'] = 0
+      ret[cluster_id]['held'] = 0
+      ret[cluster_id]['other'] = 0
+    if job_states[job['JobStatus']] == 'H':
+      ret[cluster_id]['held'] += 1
+    elif job_states[job['JobStatus']] == 'I':
+      ret[cluster_id]['idle'] += 1
+    elif job_states[job['JobStatus']] == 'R':
+      ret[cluster_id]['run'] += 1
+    else:
+      ret[cluster_id]['other'] += 1
+    ret[cluster_id]['done'] = ret[cluster_id]['TotalSubmitProcs']
+    ret[cluster_id]['done'] -= ret[cluster_id]['other']
+    ret[cluster_id]['done'] -= ret[cluster_id]['held']
+    ret[cluster_id]['done'] -= ret[cluster_id]['idle']
+    ret[cluster_id]['done'] -= ret[cluster_id]['run']
+  return ret
+
 ###########################################################
 ###########################################################
 
@@ -158,35 +185,14 @@ def check_cvmfs(job):
 ###########################################################
 ###########################################################
 
-def __condor_get(condor_id):
-  ret = []
-  if condor_id in condor_data:
-    ret.append(condor_data[condor_id])
-  for key,val in condor_data.items():
-    if key.split('.').pop(0) == condor_id:
-      ret.append(condor_data[key])
-  return ret
-
-def __crawl():
-  '''Crawl the log directory, linking condor/gemc
-  job ids, user names, and log files'''
-  ret = {}
-  for dirpath,dirnames,filenames in os.walk('/osgpool/hallb/clas12/gemc'):
-    for filename in filenames:
-      fullfilepath = dirpath+'/'+filename
-      m = re.search(log_regex,fullfilepath)
-      if m is None:
-        continue
-      user = m.group(1)
-      gemc = m.group(2)
-      condor = m.group(3)+'.'+m.group(4)
-      if condor not in ret:
-        ret[condor] = {'gemc':gemc, 'user':user, 'logs':[]}
-      ret[condor]['logs'].append(fullfilepath)
-  return ret
-
-###########################################################
-###########################################################
+summary_columns = collections.OrderedDict()
+summary_columns['TotalSubmitProcs'] = ['total',8]
+summary_columns['done'] = ['done',8]
+summary_columns['run'] = ['run',8]
+summary_columns['idle'] = ['idle',8]
+summary_columns['held'] = ['held',8]
+summary_columns['user'] = ['user',10]
+summary_columns['gemc'] = ['gemc',6]
 
 table_columns = collections.OrderedDict()
 table_columns['MATCH_GLIDEIN_Site'] = ['site',7]
@@ -198,6 +204,14 @@ table_columns['CompletionDate'] = ['end',12]
 table_columns['user'] = ['user',10]
 table_columns['gemc'] = ['gemc',6]
 table_columns['Args'] = ['args',30]
+
+summary_format = '%-14.14s'
+summary_header = ['clusterid']
+for val in summary_columns.values():
+  summary_format += ' %%-%d.%ds'%(val[1],val[1])
+  summary_header.append(val[0])
+summary_header = summary_format % tuple(summary_header)
+
 table_format = '%-14.14s'
 table_header = ['clusterid']
 for val in table_columns.values():
@@ -206,31 +220,38 @@ for val in table_columns.values():
 table_header = table_format % tuple(table_header)
 
 def human_date(timestamp):
-  try:
-    x = datetime.datetime.fromtimestamp(int(timestamp))
-  except:
-    return 'n/a'
-  return x.strftime('%m/%d %H:%M')
+  ret = 'n/a'
+  if timestamp != 0 and timestamp != '0':
+    try:
+      x = datetime.datetime.fromtimestamp(int(timestamp))
+      ret = x.strftime('%m/%d %H:%M')
+    except:
+      pass
+  return ret
 
-def tabulate_row(job):
-  cols = [ '%d.%d' % (job['ClusterId'],job['ProcId']) ]
-  for att in table_columns.keys():
+def tabulate_row(job, summary=False):
+  if summary:
+    cols = [ '%d' % job['ClusterId'] ]
+    atts = summary_columns
+    fmt = summary_format
+  else:
+    cols = [ '%d.%d' % (job['ClusterId'],job['ProcId']) ]
+    atts = table_columns
+    fmt = table_format
+  for att in atts.keys():
     x = job.get(att)
     if x is None:
       x = 'n/a'
     if type(x) is str:
       x = x.replace('undefined','n/a')
     if att.endswith('Date'):
-      if x == 0 or x == '0':
-        x = 'n/a'
-      else:
-        x = human_date(x)
+      x = human_date(x)
     elif att == 'JobStatus':
       x = job_states.get(x)
     elif att == 'Args':
       x = ' '.join(x.split()[1:])
     cols.append(x)
-  return table_format % tuple(cols)
+  return fmt % tuple(cols)
 
 ###########################################################
 ###########################################################
@@ -238,7 +259,7 @@ def tabulate_row(job):
 if __name__ == '__main__':
 
   cli = argparse.ArgumentParser('Wrap condor_q and condor_history and add features for CLAS12.')
-  cli.add_argument('-condor', default=[], metavar='# or #.#', action='append', type=str, help='limit by condor cluster id')
+  cli.add_argument('-condor', default=[], metavar='# or #.#', action='append', type=str, help='limit by condor id')
   cli.add_argument('-gemc', default=[], metavar='#', action='append', type=str, help='limit by gemc submission id')
   cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
@@ -248,6 +269,7 @@ if __name__ == '__main__':
   cli.add_argument('-tail', default=None, metavar='#', type=int, help='print last # lines of logs (negative=all, 0=filenames)')
   cli.add_argument('-json', default=False, action='store_true', help='print condor\'s full data in JSON format')
   cli.add_argument('-cvmfs', default=False, action='store_true', help='print hostnames from logs with CVMFS errors')
+  cli.add_argument('-summary', default=False, action='store_true', help='tabulate by cluster id')
 
   args = cli.parse_args(sys.argv[1:])
 
@@ -300,7 +322,11 @@ if __name__ == '__main__':
 
   elif args.tail is None:
     if len(table_body) > 0:
-      print(table_header)
-      print('\n'.join(table_body))
-      print(table_header)
+      if args.summary:
+        print(summary_header)
+        print('\n'.join([tabulate_row(x,True) for x in condor_summary().values()]))
+      else:
+        print(table_header)
+        print('\n'.join(table_body))
+        print(table_header)
 

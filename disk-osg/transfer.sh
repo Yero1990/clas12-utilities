@@ -221,6 +221,7 @@ opts="-path $srcdir -delete $delete_days -empty $delete_days -trash 2"
 if [ $dryrun -eq 0 ]; then
     opts='$opts -dryrun'
 fi
+echo "$infomsg Files to Delete:" >> $logfile
 $dirname/disk-cleanup.py $opts 2>&1 >> $logfile
 [ $? -ne 0 ] && echo "$errmsg disk-cleanup.py failed." | $tee
 
