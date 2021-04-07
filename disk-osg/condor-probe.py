@@ -35,7 +35,7 @@ condor_data = None
 def condor_load(constraints=[], opts=[], days=0, completed=False):
   '''Load data from condor_q and condor_history'''
   global condor_data
-  condor_data = {}
+  condor_data = collections.OrderedDict()
   if not completed:
     condor_q(constraints=constraints, opts=opts)
   if days > 0:
@@ -259,7 +259,7 @@ def tabulate_row(job, summary=False):
 
 if __name__ == '__main__':
 
-  cli = argparse.ArgumentParser('Wrap condor_q and condor_history and add features for CLAS12.')
+  cli = argparse.ArgumentParser(description='Wrap condor_q and condor_history and add features for CLAS12.')
   cli.add_argument('-condor', default=[], metavar='# or #.#', action='append', type=str, help='limit by condor id')
   cli.add_argument('-gemc', default=[], metavar='#', action='append', type=str, help='limit by gemc submission id')
   cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username')
@@ -280,6 +280,9 @@ if __name__ == '__main__':
     opts.append('-hold')
   elif args.running:
     opts.append('-run')
+
+  if args.completed and args.days <= 0:
+    cli.error('-completed requires -days is greater than zero')
 
   constraints.extend(args.condor)
 
