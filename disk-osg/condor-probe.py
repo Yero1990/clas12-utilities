@@ -23,6 +23,7 @@ job_states = { 0:'U', 1:'I', 2:'R', 3:'X', 4:'C', 5:'H', 6:'E' }
 cvmfs_errors=[
   'Transport endpoint is not connected',
   'Loaded environment state is inconsistent',
+  'Command not found',
   'CVMFS ERROR'
 #  'No such file or directory'
 ]
@@ -306,10 +307,13 @@ if __name__ == '__main__':
       json_data.append(job)
 
     elif args.tail is not None:
+      print(''.ljust(80,'#'))
+      print(''.ljust(80,'#'))
       print(table_header)
       print(tabulate_row(job))
       for x in (job['UserLog'],job['stdout'],job['stderr']):
         if x is not None and os.path.isfile(x):
+          print(''.ljust(80,'>'))
           print(x)
           if args.tail != 0:
             print('\n'.join(reversed(list(readlines_reverse(x, args.tail)))))
