@@ -10,7 +10,7 @@ import subprocess
 
 protected_dir = '/osgpool/hallb/clas12/gemc'
 default_ignores = [ '^.*\.hipo$', '^.*/job_[0-9]+/nodeScript.sh$' ]
-default_trashes = [ '.*\.root$', '.*\.evio$', '.*\.dat$', '^core\.*' ]
+default_trashes = [ '.*\.root$', '.*\.evio$', '^core\.*' ]
 
 cli = argparse.ArgumentParser(description='''Utility for filesystem cleanup.
   Defaults values of the -ignores and -trashes options are for CLAS12 OSG cleanup.
