@@ -279,6 +279,7 @@ table_columns = collections.OrderedDict()
 table_columns['MATCH_GLIDEIN_Site'] = ['site',10]
 table_columns['JobStatus'] = ['stat',4]
 table_columns['ExitCode'] = ['exit',4]
+table_columns['ExitBySignal'] = ['sig',4]
 table_columns['NumJobStarts'] = ['#',3]
 table_columns['wallhr'] = ['wallhr',6]
 table_columns['JobCurrentStartDate'] = ['start',12]
@@ -343,6 +344,11 @@ def tabulate_row(job, summary=False):
       x = job_states.get(x)
     elif att == 'Args':
       x = ' '.join(x.split()[1:])
+    elif att == 'ExitBySignal':
+      if x:
+        x = 'Y'
+      else:
+        x = 'N'
     cols.append(x)
   return fmt % tuple(cols)
 
