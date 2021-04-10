@@ -303,6 +303,7 @@ class CondorTable(Table):
   def add_jobs(self,jobs):
     for k,v in jobs.items():
       self.add_job(v)
+    return self
   def munge(self, name, value):
     ret = value
     if value is None or value == 'undefined':
@@ -436,11 +437,9 @@ if __name__ == '__main__':
     if len(job_table.rows) > 0:
       if args.summary or args.sitesummary:
         if args.summary:
-          summary_table.add_jobs(condor_summary())
-          print(summary_table)
+          print(summary_table.add_jobs(condor_summary()))
         else:
-          site_table.add_jobs(condor_site_summary())
-          print(site_table)
+          print(site_table.add_jobs(condor_site_summary()))
       else:
         print(job_table)
 
