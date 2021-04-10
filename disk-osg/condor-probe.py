@@ -85,6 +85,7 @@ def condor_history(constraints=[], days=1):
 def condor_munge():
   ''' Assign custom parameters based on parsing some condor parameters '''
   for condor_id,job in condor_data.items():
+    job['condorid'] = '%d.%d'%(job['ClusterId'],job['ProcId'])
     job['user'] = None
     job['gemc'] = None
     job['condor'] = None
@@ -100,10 +101,11 @@ def condor_munge():
         job['stdout'] = job['UserLog'][0:-4]+'.out'
         if condor_id != job['condor']:
           print('WTF!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-    # doesn't seem to be a reliable way to get wall time, so calculate it:
     job['wallhr'] = condor_calc_wallhr(job)
 
 def condor_calc_wallhr(job):
+  '''Use available info to calculate wall hours, since there does
+  not seem to be a more reliable way'''
   ret = None
   start = job.get('JobCurrentStartDate')
   end = job.get('CompletionDate')
@@ -258,99 +260,102 @@ def check_cvmfs(job):
 ###########################################################
 ###########################################################
 
-summary_columns = collections.OrderedDict()
-summary_columns['TotalSubmitProcs'] = ['total',8]
-summary_columns['QDate'] = ['submit',12]
-summary_columns['done'] = ['done',8]
-summary_columns['run'] = ['run',8]
-summary_columns['idle'] = ['idle',8]
-summary_columns['held'] = ['held',8]
-summary_columns['user'] = ['user',10]
-summary_columns['gemc'] = ['gemc',6]
+class Column():
+  def __init__(self, name, width):
+    self.name = name
+    self.width = width
+    self.fmt = '%%-%d.%ds' % (self.width, self.width)
 
-site_columns = collections.OrderedDict()
-site_columns['total'] = ['total',8]
-site_columns['done'] = ['done',8]
-site_columns['run'] = ['run',8]
-site_columns['idle'] = ['idle',8]
-site_columns['held'] = ['held',8]
+class Table():
+  def __init__(self):
+    self.columns = []
+    self.rows = []
+  def add_column(self, name, width):
+    self.columns.append(Column(name, width))
+    self.fmt = ' '.join([x.fmt for x in self.columns])
+  def add_row(self, values):
+    self.rows.append(self.values_to_row(values))
+  def values_to_row(self, values):
+    return self.fmt % tuple([str(x) for x in values])
+  def get_header(self):
+    return ''.join(self.fmt % tuple([x.name for x in self.columns]))
+  def __str__(self):
+    rows = [self.get_header()]
+    rows.extend(self.rows)
+    rows.append(self.get_header())
+    return '\n'.join(rows)
 
-table_columns = collections.OrderedDict()
-table_columns['MATCH_GLIDEIN_Site'] = ['site',10]
-table_columns['JobStatus'] = ['stat',4]
-table_columns['ExitCode'] = ['exit',4]
-table_columns['ExitBySignal'] = ['sig',4]
-table_columns['NumJobStarts'] = ['#',3]
-table_columns['wallhr'] = ['wallhr',6]
-table_columns['JobCurrentStartDate'] = ['start',12]
-table_columns['CompletionDate'] = ['end',12]
-table_columns['user'] = ['user',10]
-table_columns['gemc'] = ['gemc',6]
-table_columns['Args'] = ['args',30]
+class CondorColumn(Column):
+  def __init__(self, name, varname, width):
+    super().__init__(name, width)
+    self.varname = varname
 
-summary_format = '%-11.11s'
-summary_header = ['clusterid']
-for val in summary_columns.values():
-  summary_format += ' %%-%d.%ds'%(val[1],val[1])
-  summary_header.append(val[0])
-summary_header = summary_format % tuple(summary_header)
-
-site_format = '%-26.26s'
-site_header = ['site']
-for val in site_columns.values():
-  site_format += ' %%-%d.%ds'%(val[1],val[1])
-  site_header.append(val[0])
-site_header = site_format % tuple(site_header)
-
-table_format = '%-14.14s'
-table_header = ['clusterid']
-for val in table_columns.values():
-  table_format += ' %%-%d.%ds'%(val[1],val[1])
-  table_header.append(val[0])
-table_header = table_format % tuple(table_header)
-
-def human_date(timestamp):
-  ret = 'n/a'
-  if timestamp != 0 and timestamp != '0':
-    try:
-      x = datetime.datetime.fromtimestamp(int(timestamp))
-      ret = x.strftime('%m/%d %H:%M')
-    except:
-      pass
-  return ret
-
-def tabulate_row(job, summary=False):
-  if summary is None:
-    cols = [ '%s' % job.get('MATCH_GLIDEIN_Site') ]
-    atts = site_columns
-    fmt = site_format
-  elif summary:
-    cols = [ '%d' % job['ClusterId'] ]
-    atts = summary_columns
-    fmt = summary_format
-  else:
-    cols = [ '%d.%d' % (job['ClusterId'],job['ProcId']) ]
-    atts = table_columns
-    fmt = table_format
-  for att in atts.keys():
-    x = job.get(att)
-    if x is None:
-      x = 'n/a'
-    if type(x) is str:
-      x = x.replace('undefined','n/a')
-    if att.endswith('Date'):
-      x = human_date(x)
-    elif att == 'JobStatus':
-      x = job_states.get(x)
-    elif att == 'Args':
-      x = ' '.join(x.split()[1:])
-    elif att == 'ExitBySignal':
-      if x:
-        x = 'Y'
+class CondorTable(Table):
+  def add_column(self, name, varname, width):
+    self.columns.append(CondorColumn(name, varname, width))
+    self.fmt = ' '.join([x.fmt for x in self.columns])
+  def add_job(self, job):
+    self.add_row(self.job_to_values(job))
+  def job_to_values(self, job):
+    return [self.munge(x.varname, job.get(x.varname)) for x in self.columns]
+  def job_to_row(self, job):
+    return self.values_to_row(self.job_to_values(job))
+  def add_jobs(self,jobs):
+    for k,v in jobs.items():
+      self.add_job(v)
+  def munge(self, name, value):
+    ret = value
+    if value is None or value == 'undefined':
+      ret = 'n/a'
+    elif name.endswith('Date'):
+      try:
+        x = datetime.datetime.fromtimestamp(int(value))
+        ret = x.strftime('%m/%d %H:%M')
+      except:
+        pass
+    elif name == 'JobStatus':
+      ret = job_states.get(value)
+    elif name == 'Args':
+      ret = ' '.join(value.split()[1:])
+    elif name == 'ExitBySignal':
+      if value:
+        ret = 'Y'
       else:
-        x = 'N'
-    cols.append(x)
-  return fmt % tuple(cols)
+        ret = 'N'
+    return ret
+
+summary_table = CondorTable()
+summary_table.add_column('id','ClusterId',11)
+summary_table.add_column('total','TotalSubmitProcs',8)
+summary_table.add_column('submit','QDate',12)
+summary_table.add_column('done','done',8)
+summary_table.add_column('run','run',8)
+summary_table.add_column('idle','idle',8)
+summary_table.add_column('held','held',8)
+summary_table.add_column('user','user',10)
+summary_table.add_column('gemc','gemc',6)
+
+site_table = CondorTable()
+site_table.add_column('site','MATCH_GLIDEIN_Site',26)
+site_table.add_column('total','total',8)
+site_table.add_column('done','done',8)
+site_table.add_column('run','run',8)
+site_table.add_column('idle','idle',8)
+site_table.add_column('held','held',8)
+
+job_table = CondorTable()
+job_table.add_column('id','condorid',14)
+job_table.add_column('site','MATCH_GLIDEIN_Site',10)
+job_table.add_column('stat','JobStatus',4)
+job_table.add_column('exit','ExitCode',4)
+job_table.add_column('sig','ExitBySignal',4)
+job_table.add_column('#','NumJobStarts',3)
+job_table.add_column('wallhr','wallhr',6)
+job_table.add_column('start','JobCurrentStartDate',12)
+job_table.add_column('end','CompletionDate',12)
+job_table.add_column('user','user',10)
+job_table.add_column('gemc','gemc',6)
+job_table.add_column('args','Args',30)
 
 ###########################################################
 ###########################################################
@@ -390,7 +395,6 @@ if __name__ == '__main__':
   condor_load(constraints=constraints, opts=opts, days=args.days, completed=args.completed)
 
   cvmfs_hosts = []
-  table_body = []
   json_data = []
 
   for cid,job in condor_data.items():
@@ -409,8 +413,8 @@ if __name__ == '__main__':
     elif args.tail is not None:
       print(''.ljust(80,'#'))
       print(''.ljust(80,'#'))
-      print(table_header)
-      print(tabulate_row(job))
+      print(job_table.get_header())
+      print(job_table.job_to_row(job))
       for x in (job['UserLog'],job['stdout'],job['stderr']):
         if x is not None and os.path.isfile(x):
           print(''.ljust(80,'>'))
@@ -419,7 +423,7 @@ if __name__ == '__main__':
             print('\n'.join(reversed(list(readlines_reverse(x, args.tail)))))
 
     else:
-      table_body.append(tabulate_row(job))
+      job_table.add_job(job)
 
   if args.cvmfs:
     if len(cvmfs_hosts) > 0:
@@ -429,16 +433,14 @@ if __name__ == '__main__':
     print(json.dumps(json_data, **json_format))
 
   elif args.tail is None:
-    if len(table_body) > 0:
+    if len(job_table.rows) > 0:
       if args.summary or args.sitesummary:
         if args.summary:
-          print(summary_header)
-          print('\n'.join([tabulate_row(x,True) for x in condor_summary().values()]))
+          summary_table.add_jobs(condor_summary())
+          print(summary_table)
         else:
-          print(site_header)
-          print('\n'.join([tabulate_row(x,None) for x in condor_site_summary().values()]))
+          site_table.add_jobs(condor_site_summary())
+          print(site_table)
       else:
-        print(table_header)
-        print('\n'.join(table_body))
-        print(table_header)
+        print(job_table)
 
