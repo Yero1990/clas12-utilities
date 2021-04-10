@@ -129,7 +129,7 @@ def condor_match(job, args):
   if len(args.site) > 0:
     if job.get('MATCH_GLIDEIN_Site') is not None:
       for site in args.site:
-        if re.fullmatch(site,job['MATCH_GLIDEIN_Site']) is not None:
+        if job['MATCH_GLIDEIN_Site'].find(site) >= 0:
           return True
       return False
   # the rest are OR'd:::::::::
@@ -366,7 +366,7 @@ if __name__ == '__main__':
   cli.add_argument('-condor', default=[], metavar='# or #.#', action='append', type=str, help='limit by condor id')
   cli.add_argument('-gemc', default=[], metavar='#', action='append', type=str, help='limit by gemc submission id')
   cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username')
-  cli.add_argument('-site', default=[], action='append', type=str, help='limit by OSG site name (can be a regular expression)')
+  cli.add_argument('-site', default=[], action='append', type=str, help='limit by OSG site name (pattern matched)')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
   cli.add_argument('-idle', default=False, action='store_true', help='limit to jobs currently in idle state')
   cli.add_argument('-running', default=False, action='store_true', help='limit to jobs currently in running state')
