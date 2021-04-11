@@ -20,12 +20,13 @@ import collections
 json_format =  {'indent':2, 'separators':(',',': '), 'sort_keys':True}
 log_regex = '/([a-z]+)/job_([0-9]+)/log/job\.([0-9]+)\.([0-9]+)\.'
 job_states = { 0:'U', 1:'I', 2:'R', 3:'X', 4:'C', 5:'H', 6:'E' }
-cvmfs_errors=[
+cvmfs_error_strings = [
   'Loaded environment state is inconsistent',
   'Command not found',
+  'Unable to access the Singularity image',
   'CVMFS ERROR'
-#  'Transport endpoint is not connected',
 #  'No such file or directory'
+#  'Transport endpoint is not connected',
 ]
 
 ###########################################################
@@ -72,7 +73,6 @@ def condor_q(constraints=[], opts=[]):
 def condor_history(constraints=[], days=1):
   '''Get the JSON from condor_history'''
   global condor_data
-  # calculate start time:
   now = datetime.datetime.now()
   start = now + datetime.timedelta(days = -days)
   start = str(int(start.timestamp()))
@@ -83,7 +83,7 @@ def condor_history(constraints=[], days=1):
   condor_add_json(cmd)
 
 def condor_munge():
-  ''' Assign custom parameters based on parsing some condor parameters '''
+  '''Assign custom parameters based on parsing some condor parameters'''
   for condor_id,job in condor_data.items():
     job['condorid'] = '%d.%d'%(job['ClusterId'],job['ProcId'])
     job['user'] = None
@@ -125,7 +125,7 @@ def condor_match(job, args):
     return job_states.get(job['JobStatus']) == 'I'
   if args.completed:
     return job_states.get(job['JobStatus']) == 'C'
-  # support regexes for site, because some are very long strings:
+  # do pattern matching for site:
   if len(args.site) > 0:
     if job.get('MATCH_GLIDEIN_Site') is not None:
       for site in args.site:
@@ -150,7 +150,8 @@ def condor_match(job, args):
 
 job_counts = {'done':0,'run':0,'idle':0,'held':0,'other':0,'total':0}
 
-def condor_summary():
+def condor_cluster_summary():
+  '''Tally jobs by condor's ClusterId'''
   ret = collections.OrderedDict()
   for condor_id,job in condor_data.items():
     cluster_id = condor_id.split('.').pop(0)
@@ -173,6 +174,7 @@ def condor_summary():
   return ret
 
 def condor_site_summary():
+  '''Tally jobs by site'''
   sites = collections.OrderedDict()
   for condor_id,job in condor_data.items():
     site = job.get('MATCH_GLIDEIN_Site')
@@ -247,12 +249,12 @@ def readlines_reverse(filename, max_lines):
   yield line[::-1]
 
 def check_cvmfs(job):
-  ''' Check for CVMFS errors in logs.  True is good, no error. '''
+  ''' Return wether a CVMFS error is detected'''
   if job.get('stderr') is not None:
     if os.path.isfile(job['stderr']):
       with open(job['stderr'],'r',errors='replace') as f:
         for line in f.readlines():
-          for x in cvmfs_errors:
+          for x in cvmfs_error_strings:
             if line.find(x) >= 0:
               return False
   return True
@@ -270,15 +272,22 @@ class Table():
   def __init__(self):
     self.columns = []
     self.rows = []
-  def add_column(self, name, width):
-    self.columns.append(Column(name, width))
+    self.width = 0
+  def add_column(self, column):
+    if not isinstance(column, Column):
+      raise TypeError()
+    self.columns.append(column)
     self.fmt = ' '.join([x.fmt for x in self.columns])
+    self.width = sum([x.width for x in self.columns]) + len(self.columns) - 1
   def add_row(self, values):
     self.rows.append(self.values_to_row(values))
   def values_to_row(self, values):
     return self.fmt % tuple([str(x) for x in values])
   def get_header(self):
-    return ''.join(self.fmt % tuple([x.name for x in self.columns]))
+    ret = ''.ljust(min(100,self.width),'-')
+    ret += '\n' + ''.join(self.fmt % tuple([x.name for x in self.columns]))
+    ret += '\n' + ''.ljust(min(100,self.width),'-')
+    return ret
   def __str__(self):
     rows = [self.get_header()]
     rows.extend(self.rows)
@@ -292,14 +301,14 @@ class CondorColumn(Column):
 
 class CondorTable(Table):
   def add_column(self, name, varname, width):
-    self.columns.append(CondorColumn(name, varname, width))
-    self.fmt = ' '.join([x.fmt for x in self.columns])
-  def add_job(self, job):
-    self.add_row(self.job_to_values(job))
+    super().add_column(CondorColumn(name, varname, width))
   def job_to_values(self, job):
     return [self.munge(x.varname, job.get(x.varname)) for x in self.columns]
   def job_to_row(self, job):
     return self.values_to_row(self.job_to_values(job))
+  def add_job(self, job):
+    self.add_row(self.job_to_values(job))
+    return self
   def add_jobs(self,jobs):
     for k,v in jobs.items():
       self.add_job(v)
@@ -308,14 +317,6 @@ class CondorTable(Table):
     ret = value
     if value is None or value == 'undefined':
       ret = 'n/a'
-    elif name.endswith('Date'):
-      try:
-        x = datetime.datetime.fromtimestamp(int(value))
-        ret = x.strftime('%m/%d %H:%M')
-      except:
-        pass
-    elif name == 'JobStatus':
-      ret = job_states.get(value)
     elif name == 'Args':
       ret = ' '.join(value.split()[1:])
     elif name == 'ExitBySignal':
@@ -323,7 +324,21 @@ class CondorTable(Table):
         ret = 'Y'
       else:
         ret = 'N'
+    elif name == 'JobStatus':
+      try:
+        ret = job_states[value]
+      except:
+        pass
+    elif name.endswith('Date'):
+      try:
+        x = datetime.datetime.fromtimestamp(int(value))
+        ret = x.strftime('%m/%d %H:%M')
+      except:
+        pass
     return ret
+
+###########################################################
+###########################################################
 
 summary_table = CondorTable()
 summary_table.add_column('id','ClusterId',11)
@@ -437,7 +452,7 @@ if __name__ == '__main__':
     if len(job_table.rows) > 0:
       if args.summary or args.sitesummary:
         if args.summary:
-          print(summary_table.add_jobs(condor_summary()))
+          print(summary_table.add_jobs(condor_cluster_summary()))
         else:
           print(site_table.add_jobs(condor_site_summary()))
       else:
