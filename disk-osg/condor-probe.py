@@ -269,6 +269,7 @@ class Column():
     self.fmt = '%%-%d.%ds' % (self.width, self.width)
 
 class Table():
+  max_width = 100
   def __init__(self):
     self.columns = []
     self.rows = []
@@ -280,13 +281,13 @@ class Table():
     self.fmt = ' '.join([x.fmt for x in self.columns])
     self.width = sum([x.width for x in self.columns]) + len(self.columns) - 1
   def add_row(self, values):
-    self.rows.append(self.values_to_row(values))
+    self.rows.append(self.values_to_row(values).rstrip())
   def values_to_row(self, values):
     return self.fmt % tuple([str(x) for x in values])
   def get_header(self):
-    ret = ''.ljust(min(100,self.width),'-')
-    ret += '\n' + ''.join(self.fmt % tuple([x.name for x in self.columns]))
-    ret += '\n' + ''.ljust(min(100,self.width),'-')
+    ret = ''.ljust(min(Table.max_width,self.width),'-')
+    ret += '\n' + (self.fmt % tuple([x.name for x in self.columns])).rstrip()
+    ret += '\n' + ''.ljust(min(Table.max_width,self.width),'-')
     return ret
   def __str__(self):
     rows = [self.get_header()]
