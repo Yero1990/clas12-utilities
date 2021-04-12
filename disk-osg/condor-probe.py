@@ -12,6 +12,7 @@ import os
 import sys
 import glob
 import json
+import time
 import argparse
 import datetime
 import subprocess
@@ -79,8 +80,20 @@ def condor_history(constraints=[], days=1):
   cmd = ['condor_history','gemc']
   cmd.extend(constraints)
   cmd.extend(opts)
-  cmd.extend(['-json','-completedsince',start])
+  cmd.extend(['-json','-since','\'CompletionDate!=0 && CompletionDate<%s\''%start])
   condor_add_json(cmd)
+
+def condor_vacate_job(job):
+  cmd = ['condor_vacate_job', '-fast', job.get('condorid')]
+  try:
+    response = subprocess.check_output(cmd).decode('UTF-8').rstrip()
+    if re.fullmatch('Job %s fast-vacated'%job.get('condorid'), response) is None:
+      raise ValueError()
+    else:
+      print(job.get('MATCH_GLIDEIN_Site')+' '+job.get('LastRemoteHost')+' '+job.get('condorid'))
+  except:
+    print('ERROR running %s :::::::::'%' '.join(cmd))
+    print(response)
 
 def condor_munge():
   '''Assign custom parameters based on parsing some condor parameters'''
@@ -120,33 +133,31 @@ def condor_calc_wallhr(job):
 
 def condor_match(job, args):
   ''' Apply job constraints, on top of those condor knows about'''
-  # these are AND'd:::::::::::
+  if len(args.condor)>0:
+    if job['condor'] not in args.condor:
+      if job['condor'].split('.').pop(0) not in args.condor:
+        return False
+  if len(args.user)>0:
+    if job['user'] not in args.user:
+      return False
+  if len(args.gemc)>0:
+    if job['gemc'] not in args.gemc:
+      return False
+  if len(args.site) > 0:
+    if job.get('MATCH_GLIDEIN_Site') is None:
+      return False
+    matched = False
+    for site in args.site:
+      if job['MATCH_GLIDEIN_Site'].find(site) >= 0:
+        matched = True
+        break
+    if not matched:
+      return False
   if args.idle:
     return job_states.get(job['JobStatus']) == 'I'
   if args.completed:
     return job_states.get(job['JobStatus']) == 'C'
-  # do pattern matching for site:
-  if len(args.site) > 0:
-    if job.get('MATCH_GLIDEIN_Site') is not None:
-      for site in args.site:
-        if job['MATCH_GLIDEIN_Site'].find(site) >= 0:
-          return True
-      return False
-  # the rest are OR'd:::::::::
-  if len(args.condor)==0:
-    if len(args.user)==0:
-      if len(args.gemc)==0:
-        if len(args.site)==0:
-          return True
-  if job['condor'] in args.condor:
-    return True
-  if job['condor'].split('.').pop(0) in args.condor:
-    return True
-  if job['user'] in args.user:
-    return True
-  if job['gemc'] in args.gemc:
-    return True
-  return False
+  return True
 
 job_counts = {'done':0,'run':0,'idle':0,'held':0,'other':0,'total':0}
 
@@ -331,11 +342,14 @@ class CondorTable(Table):
       except:
         pass
     elif name.endswith('Date'):
-      try:
-        x = datetime.datetime.fromtimestamp(int(value))
-        ret = x.strftime('%m/%d %H:%M')
-      except:
-        pass
+      if value == '0' or value == 0:
+        ret = 'n/a'
+      else:
+        try:
+          x = datetime.datetime.fromtimestamp(int(value))
+          ret = x.strftime('%m/%d %H:%M')
+        except:
+          pass
     return ret
 
 ###########################################################
@@ -394,6 +408,7 @@ if __name__ == '__main__':
   cli.add_argument('-cvmfs', default=False, action='store_true', help='print hostnames from logs with CVMFS errors')
   cli.add_argument('-summary', default=False, action='store_true', help='tabulate by cluster id instead of per-job')
   cli.add_argument('-sitesummary', default=False, action='store_true', help='tabulate by site instead of per-job')
+  cli.add_argument('-vacate', default=-1, metavar='#', type=float, help='vacate jobs with wall hours greater than #')
 
   args = cli.parse_args(sys.argv[1:])
 
@@ -419,7 +434,13 @@ if __name__ == '__main__':
     if not condor_match(job, args):
       continue
 
-    if args.cvmfs:
+    if args.vacate>0:
+      if job.get('wallhr') is not None:
+        if float(job.get('wallhr')) > args.vacate:
+          if job_states.get(job['JobStatus']) == 'R':
+            condor_vacate_job(job)
+
+    elif args.cvmfs:
       if not check_cvmfs(job):
         if 'LastRemoteHost' in job:
           cvmfs_hosts.append(job.get('MATCH_GLIDEIN_Site')+' '+job['LastRemoteHost']+' '+cid)
