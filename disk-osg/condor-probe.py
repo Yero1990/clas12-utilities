@@ -48,20 +48,31 @@ def condor_load(constraints=[], opts=[], days=0, completed=False):
 def condor_add_json(cmd):
   '''Add JSON condor data to local dictionary'''
   global condor_data
-  tmp = None
+  response = None
   try:
-    tmp = subprocess.check_output(cmd).decode('UTF-8')
-    if len(tmp) > 0:
-      tmp = json.loads(tmp)
-      for x in tmp:
+    response = subprocess.check_output(cmd).decode('UTF-8')
+    if len(response) > 0:
+      for x in json.loads(response):
         if 'ClusterId' in x and 'ProcId' in x:
           condor_data['%d.%d'%(x['ClusterId'],x['ProcId'])] = x
         else:
           pass
   except:
     print('Error running command:  '+' '.join(cmd)+':')
-    print(tmp)
+    print(response)
     sys.exit(1)
+
+def condor_vacate_job(job):
+  cmd = ['condor_vacate_job', '-fast', job.get('condorid')]
+  try:
+    response = subprocess.check_output(cmd).decode('UTF-8').rstrip()
+    if re.fullmatch('Job %s fast-vacated'%job.get('condorid'), response) is None:
+      raise ValueError()
+    else:
+      print(job.get('MATCH_GLIDEIN_Site')+' '+job.get('LastRemoteHost')+' '+job.get('condorid'))
+  except:
+    print('ERROR running command:  '+' '.join(cmd))
+    print(response)
 
 def condor_q(constraints=[], opts=[]):
   '''Get the JSON from condor_q'''
@@ -82,18 +93,6 @@ def condor_history(constraints=[], days=1):
   cmd.extend(opts)
   cmd.extend(['-json','-since','\'CompletionDate!=0 && CompletionDate<%s\''%start])
   condor_add_json(cmd)
-
-def condor_vacate_job(job):
-  cmd = ['condor_vacate_job', '-fast', job.get('condorid')]
-  try:
-    response = subprocess.check_output(cmd).decode('UTF-8').rstrip()
-    if re.fullmatch('Job %s fast-vacated'%job.get('condorid'), response) is None:
-      raise ValueError()
-    else:
-      print(job.get('MATCH_GLIDEIN_Site')+' '+job.get('LastRemoteHost')+' '+job.get('condorid'))
-  except:
-    print('ERROR running %s :::::::::'%' '.join(cmd))
-    print(response)
 
 def condor_munge():
   '''Assign custom parameters based on parsing some condor parameters'''
@@ -274,9 +273,10 @@ def check_cvmfs(job):
 ###########################################################
 
 class Column():
-  def __init__(self, name, width):
+  def __init__(self, name, width, tally=None):
     self.name = name
     self.width = width
+    self.tally = tally
     self.fmt = '%%-%d.%ds' % (self.width, self.width)
 
 class Table():
@@ -284,17 +284,41 @@ class Table():
   def __init__(self):
     self.columns = []
     self.rows = []
+    self.tallies = []
     self.width = 0
-  def add_column(self, column):
+  def add_column(self, column, tally=None):
     if not isinstance(column, Column):
       raise TypeError()
     self.columns.append(column)
+    self.tallies.append([])
     self.fmt = ' '.join([x.fmt for x in self.columns])
     self.width = sum([x.width for x in self.columns]) + len(self.columns) - 1
   def add_row(self, values):
     self.rows.append(self.values_to_row(values).rstrip())
+    self.tally(values)
+  def tally(self, values):
+    for i in range(len(values)):
+      if self.columns[i].tally is not None:
+        try:
+          x = float(values[i])
+          self.tallies[i].append(x)
+        except:
+          pass
   def values_to_row(self, values):
     return self.fmt % tuple([str(x) for x in values])
+  def get_tallies(self):
+    # assume it's never appropriate to tally the 1st column
+    values = ['tally']
+    for i in range(1,len(self.columns)):
+      if self.columns[i].tally is not None:
+        values.append(sum(self.tallies[i]))
+        if self.columns[i].tally is 'avg':
+          values[-1] = '%.1f' % (values[-1]/len(self.tallies[i]))
+        else:
+          values[-1] = int(values[-1])
+      else:
+        values.append('')
+    return (self.fmt % tuple(values)).rstrip()
   def get_header(self):
     ret = ''.ljust(min(Table.max_width,self.width),'-')
     ret += '\n' + (self.fmt % tuple([x.name for x in self.columns])).rstrip()
@@ -303,17 +327,18 @@ class Table():
   def __str__(self):
     rows = [self.get_header()]
     rows.extend(self.rows)
+    rows.append(self.get_tallies())
     rows.append(self.get_header())
     return '\n'.join(rows)
 
 class CondorColumn(Column):
-  def __init__(self, name, varname, width):
-    super().__init__(name, width)
+  def __init__(self, name, varname, width, tally=None):
+    super().__init__(name, width, tally)
     self.varname = varname
 
 class CondorTable(Table):
-  def add_column(self, name, varname, width):
-    super().add_column(CondorColumn(name, varname, width))
+  def add_column(self, name, varname, width, tally=None):
+    super().add_column(CondorColumn(name, varname, width, tally))
   def job_to_values(self, job):
     return [self.munge(x.varname, job.get(x.varname)) for x in self.columns]
   def job_to_row(self, job):
@@ -357,22 +382,22 @@ class CondorTable(Table):
 
 summary_table = CondorTable()
 summary_table.add_column('id','ClusterId',11)
-summary_table.add_column('total','TotalSubmitProcs',8)
+summary_table.add_column('total','TotalSubmitProcs',8,tally='sum')
 summary_table.add_column('submit','QDate',12)
-summary_table.add_column('done','done',8)
-summary_table.add_column('run','run',8)
-summary_table.add_column('idle','idle',8)
-summary_table.add_column('held','held',8)
+summary_table.add_column('done','done',8,tally='sum')
+summary_table.add_column('run','run',8,tally='sum')
+summary_table.add_column('idle','idle',8,tally='sum')
+summary_table.add_column('held','held',8,tally='sum')
 summary_table.add_column('user','user',10)
 summary_table.add_column('gemc','gemc',6)
 
 site_table = CondorTable()
 site_table.add_column('site','MATCH_GLIDEIN_Site',26)
-site_table.add_column('total','total',8)
-site_table.add_column('done','done',8)
-site_table.add_column('run','run',8)
-site_table.add_column('idle','idle',8)
-site_table.add_column('held','held',8)
+site_table.add_column('total','total',8,tally='sum')
+site_table.add_column('done','done',8,tally='sum')
+site_table.add_column('run','run',8,tally='sum')
+site_table.add_column('idle','idle',8,tally='sum')
+site_table.add_column('held','held',8,tally='sum')
 
 job_table = CondorTable()
 job_table.add_column('id','condorid',14)
@@ -380,8 +405,8 @@ job_table.add_column('site','MATCH_GLIDEIN_Site',10)
 job_table.add_column('stat','JobStatus',4)
 job_table.add_column('exit','ExitCode',4)
 job_table.add_column('sig','ExitBySignal',4)
-job_table.add_column('#','NumJobStarts',3)
-job_table.add_column('wallhr','wallhr',6)
+job_table.add_column('#','NumJobStarts',3,tally='avg')
+job_table.add_column('wallhr','wallhr',6,tally='avg')
 job_table.add_column('start','JobCurrentStartDate',12)
 job_table.add_column('end','CompletionDate',12)
 job_table.add_column('user','user',10)
