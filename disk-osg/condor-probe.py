@@ -35,15 +35,23 @@ cvmfs_error_strings = [
 
 condor_data = None
 
-def condor_load(constraints=[], opts=[], days=0, completed=False):
+def condor_load(constraints=[], opts=[], hours=0, completed=False):
   '''Load data from condor_q and condor_history'''
   global condor_data
   condor_data = collections.OrderedDict()
   if not completed:
     condor_q(constraints=constraints, opts=opts)
-  if days > 0:
-    condor_history(constraints=constraints, days=days)
+  if hours > 0:
+    condor_history(constraints=constraints, hours=hours)
   condor_munge()
+
+def condor_read_file(path):
+  global condor_data
+  condor_data = json.load(open(path,'r'))
+
+def condor_write_file(path):
+  with open(path,'w') as f:
+    f.write(json.dumps(condor_data, **json_format))
 
 def condor_add_json(cmd):
   '''Add JSON condor data to local dictionary'''
@@ -68,11 +76,9 @@ def condor_vacate_job(job):
     response = subprocess.check_output(cmd).decode('UTF-8').rstrip()
     if re.fullmatch('Job %s fast-vacated'%job.get('condorid'), response) is None:
       raise ValueError()
-    else:
-      print(job.get('MATCH_GLIDEIN_Site')+' '+job.get('LastRemoteHost')+' '+job.get('condorid'))
   except:
-    print('ERROR running command:  '+' '.join(cmd))
-    print(response)
+    print('ERROR running command "%s":\n%s'%(' '.join(cmd),response))
+  print(str(job.get('MATCH_GLIDEIN_Site'))+' '+str(job.get('LastRemoteHost'))+' '+str(job.get('condorid')))
 
 def condor_q(constraints=[], opts=[]):
   '''Get the JSON from condor_q'''
@@ -82,16 +88,16 @@ def condor_q(constraints=[], opts=[]):
   cmd.extend(['-nobatch','-json'])
   condor_add_json(cmd)
 
-def condor_history(constraints=[], days=1):
+def condor_history(constraints=[], hours=1):
   '''Get the JSON from condor_history'''
   global condor_data
   now = datetime.datetime.now()
-  start = now + datetime.timedelta(days = -days)
+  start = now + datetime.timedelta(hours = -hours)
   start = str(int(start.timestamp()))
   cmd = ['condor_history','gemc']
   cmd.extend(constraints)
   cmd.extend(opts)
-  cmd.extend(['-json','-since','\'CompletionDate!=0 && CompletionDate<%s\''%start])
+  cmd.extend(['-json','-since',"CompletionDate!=0&&CompletionDate<%s"%start])
   condor_add_json(cmd)
 
 def condor_munge():
@@ -160,10 +166,12 @@ def condor_match(job, args):
 
 job_counts = {'done':0,'run':0,'idle':0,'held':0,'other':0,'total':0}
 
-def condor_cluster_summary():
+def condor_cluster_summary(args):
   '''Tally jobs by condor's ClusterId'''
   ret = collections.OrderedDict()
   for condor_id,job in condor_data.items():
+    if not condor_match(job,args):
+      continue
     cluster_id = condor_id.split('.').pop(0)
     if cluster_id not in ret:
       ret[cluster_id] = job.copy()
@@ -183,14 +191,17 @@ def condor_cluster_summary():
     ret[cluster_id]['done'] -= ret[cluster_id]['run']
   return ret
 
-def condor_site_summary():
+def condor_site_summary(args):
   '''Tally jobs by site'''
   sites = collections.OrderedDict()
   for condor_id,job in condor_data.items():
+    if not condor_match(job,args):
+      continue
     site = job.get('MATCH_GLIDEIN_Site')
     if site not in sites:
       sites[site] = job.copy()
       sites[site].update(job_counts.copy())
+      sites[site]['wallhr'] = []
     sites[site]['total'] += 1
     if job_states[job['JobStatus']] == 'H':
       sites[site]['held'] += 1
@@ -198,8 +209,13 @@ def condor_site_summary():
       sites[site]['idle'] += 1
     elif job_states[job['JobStatus']] == 'R':
       sites[site]['run'] += 1
-    #elif job_states[job['JobStatus']] == 'C':
-    #  sites[site]['done'] += 1
+    elif job_states[job['JobStatus']] == 'C':
+      #sites[site]['done'] += 1
+      try:
+        x = float(job.get('wallhr'))
+        sites[site]['wallhr'].append(x)
+      except:
+        pass
     else:
       sites[site]['other'] += 1
     sites[site]['done'] = sites[site]['total']
@@ -207,6 +223,13 @@ def condor_site_summary():
     sites[site]['done'] -= sites[site]['held']
     sites[site]['done'] -= sites[site]['idle']
     sites[site]['done'] -= sites[site]['run']
+  for site in sites.keys():
+    if len(sites[site]['wallhr']) > 0:
+      x = sum(sites[site]['wallhr'])
+      sites[site]['wallhr'] = x / len(sites[site]['wallhr'])
+      sites[site]['wallhr'] = '%5.1f' % sites[site]['wallhr']
+    else:
+      sites[site]['wallhr'] = 'n/a'
   return sort_dict(sites, 'total')
 
 ###########################################################
@@ -312,10 +335,11 @@ class Table():
     for i in range(1,len(self.columns)):
       if self.columns[i].tally is not None:
         values.append(sum(self.tallies[i]))
-        if self.columns[i].tally is 'avg':
-          values[-1] = '%.1f' % (values[-1]/len(self.tallies[i]))
-        else:
-          values[-1] = int(values[-1])
+        if values[-1] > 0:
+          if self.columns[i].tally is 'avg':
+            values[-1] = '%.1f' % (values[-1]/len(self.tallies[i]))
+          else:
+            values[-1] = int(values[-1])
       else:
         values.append('')
     return (self.fmt % tuple(values)).rstrip()
@@ -398,6 +422,7 @@ site_table.add_column('done','done',8,tally='sum')
 site_table.add_column('run','run',8,tally='sum')
 site_table.add_column('idle','idle',8,tally='sum')
 site_table.add_column('held','held',8,tally='sum')
+site_table.add_column('wallhr','wallhr',8,tally='avg')
 
 job_table = CondorTable()
 job_table.add_column('id','condorid',14)
@@ -427,13 +452,15 @@ if __name__ == '__main__':
   cli.add_argument('-idle', default=False, action='store_true', help='limit to jobs currently in idle state')
   cli.add_argument('-running', default=False, action='store_true', help='limit to jobs currently in running state')
   cli.add_argument('-completed', default=False, action='store_true', help='limit to completed jobs')
-  cli.add_argument('-days', default=0, metavar='#', type=int, help='look back # days for completed jobs (default=0)')
+  cli.add_argument('-hours', default=0, metavar='#', type=int, help='look back # hours for completed jobs (default=0)')
   cli.add_argument('-tail', default=None, metavar='#', type=int, help='print last # lines of logs (negative=all, 0=filenames)')
   cli.add_argument('-json', default=False, action='store_true', help='print condor\'s full data in JSON format')
   cli.add_argument('-cvmfs', default=False, action='store_true', help='print hostnames from logs with CVMFS errors')
   cli.add_argument('-summary', default=False, action='store_true', help='tabulate by cluster id instead of per-job')
   cli.add_argument('-sitesummary', default=False, action='store_true', help='tabulate by site instead of per-job')
   cli.add_argument('-vacate', default=-1, metavar='#', type=float, help='vacate jobs with wall hours greater than #')
+  #cli.add_argument('-output', default=False, type=str, help='write condor query results to a JSON file')
+  #cli.add_argument('-input', default=False, type=str, help='read condor query results from a JSON file')
 
   args = cli.parse_args(sys.argv[1:])
 
@@ -444,12 +471,17 @@ if __name__ == '__main__':
   elif args.running:
     opts.append('-run')
 
-  if args.completed and args.days <= 0:
-    cli.error('-completed requires -days is greater than zero')
+  if args.completed and args.hours <= 0:
+    cli.error('-completed requires -hours is greater than zero')
 
   constraints.extend(args.condor)
 
-  condor_load(constraints=constraints, opts=opts, days=args.days, completed=args.completed)
+  #if args.input:
+  #  condor_read_file(args.input)
+  #else:
+  condor_load(constraints=constraints, opts=opts, hours=args.hours, completed=args.completed)
+  #if args.output:
+  #  condor_write_file(args.output)
 
   cvmfs_hosts = []
   json_data = []
@@ -499,9 +531,9 @@ if __name__ == '__main__':
     if len(job_table.rows) > 0:
       if args.summary or args.sitesummary:
         if args.summary:
-          print(summary_table.add_jobs(condor_cluster_summary()))
+          print(summary_table.add_jobs(condor_cluster_summary(args)))
         else:
-          print(site_table.add_jobs(condor_site_summary()))
+          print(site_table.add_jobs(condor_site_summary(args)))
       else:
         print(job_table)
 
