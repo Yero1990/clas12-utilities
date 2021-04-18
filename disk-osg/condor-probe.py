@@ -21,6 +21,8 @@ import collections
 json_format =  {'indent':2, 'separators':(',',': '), 'sort_keys':True}
 log_regex = '/([a-z]+)/job_([0-9]+)/log/job\.([0-9]+)\.([0-9]+)\.'
 job_states = { 0:'U', 1:'I', 2:'R', 3:'X', 4:'C', 5:'H', 6:'E' }
+null_field = '-'
+
 cvmfs_error_strings = [
   'Loaded environment state is inconsistent',
   'Command not found',
@@ -35,7 +37,7 @@ cvmfs_error_strings = [
 
 condor_data = None
 
-def condor_load(constraints=[], opts=[], hours=0, completed=False):
+def condor_query(constraints=[], opts=[], hours=0, completed=False):
   '''Load data from condor_q and condor_history'''
   global condor_data
   condor_data = collections.OrderedDict()
@@ -45,11 +47,12 @@ def condor_load(constraints=[], opts=[], hours=0, completed=False):
     condor_history(constraints=constraints, hours=hours)
   condor_munge()
 
-def condor_read_file(path):
+def condor_read(path):
   global condor_data
   condor_data = json.load(open(path,'r'))
+  condor_munge()
 
-def condor_write_file(path):
+def condor_write(path):
   with open(path,'w') as f:
     f.write(json.dumps(condor_data, **json_format))
 
@@ -118,13 +121,19 @@ def condor_munge():
         job['stderr'] = job['UserLog'][0:-4]+'.err'
         job['stdout'] = job['UserLog'][0:-4]+'.out'
         if condor_id != job['condor']:
-          print('WTF!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+          raise ValueError('condor ids do not match.')
     job['wallhr'] = condor_calc_wallhr(job)
 
 def condor_calc_wallhr(job):
   '''Use available info to calculate wall hours, since there does
   not seem to be a more reliable way'''
   ret = None
+  if job_states[job['JobStatus']] == 'X':
+    return ret
+  if job_states[job['JobStatus']] == 'H':
+    return ret
+  if job_states[job['JobStatus']] == 'E':
+    return ret
   start = job.get('JobCurrentStartDate')
   end = job.get('CompletionDate')
   if start is not None and start > 0:
@@ -172,6 +181,10 @@ def condor_match(job, args):
     return job_states.get(job['JobStatus']) == 'I'
   if args.completed:
     return job_states.get(job['JobStatus']) == 'C'
+  if args.running:
+    return job_states.get(job['JobStatus']) == 'R'
+  if args.held:
+    return job_states.get(job['JobStatus']) == 'H'
   return True
 
 def get_status_key(job):
@@ -186,6 +199,20 @@ def get_status_key(job):
   else:
     return 'other'
 
+def condor_average(dictionary):
+  if len(dictionary['wallhr']) > 0:
+    x = sum(dictionary['wallhr'])
+    dictionary['wallhr'] = x / len(dictionary['wallhr'])
+    dictionary['wallhr'] = '%.1f' % dictionary['wallhr']
+  else:
+    dictionary['wallhr'] = null_field
+  if len(dictionary['attempt']) > 0:
+    x = sum(dictionary['attempt'])
+    dictionary['attempt'] = x / len(dictionary['attempt'])
+    dictionary['attempt'] = '%.1f' % dictionary['attempt']
+  else:
+    dictionary['attempt'] = null_field
+
 def condor_cluster_summary(args):
   '''Tally jobs by condor's ClusterId'''
   ret = collections.OrderedDict()
@@ -199,6 +226,8 @@ def condor_cluster_summary(args):
     ret[cluster_id]['done'] -= ret[cluster_id]['held']
     ret[cluster_id]['done'] -= ret[cluster_id]['idle']
     ret[cluster_id]['done'] -= ret[cluster_id]['run']
+#  for x in ret.values():
+#    condor_average(x)
   return ret
 
 def condor_site_summary(args):
@@ -211,23 +240,20 @@ def condor_site_summary(args):
       sites[site] = job.copy()
       sites[site].update(job_counts.copy())
       sites[site]['wallhr'] = []
+      sites[site]['attempt'] = []
+    sites[site]['attempt'].append(job['NumJobStarts'])
     sites[site]['total'] += 1
     sites[site][get_status_key(job)] += 1
-    if job_states[job['JobStatus']] == 'C':
+    if args.running or job_states[job['JobStatus']] == 'C':
       try:
         x = float(job.get('wallhr'))
         sites[site]['wallhr'].append(x)
       except:
         pass
-    if args.hours <= 0:
-      sites[site]['done'] = '-'
   for site in sites.keys():
-    if len(sites[site]['wallhr']) > 0:
-      x = sum(sites[site]['wallhr'])
-      sites[site]['wallhr'] = x / len(sites[site]['wallhr'])
-      sites[site]['wallhr'] = '%.1f' % sites[site]['wallhr']
-    else:
-      sites[site]['wallhr'] = '-'
+    condor_average(sites[site])
+    if args.hours <= 0:
+      sites[site]['done'] = null_field
   return sort_dict(sites, 'total')
 
 ###########################################################
@@ -339,12 +365,12 @@ class Table():
         else:
           values[-1] = int(values[-1])
       else:
-        values.append('-')
+        values.append(null_field)
     return (self.fmt % tuple(values)).rstrip()
   def get_header(self):
-    ret = ''.ljust(min(Table.max_width,self.width),'-')
+    ret = ''.ljust(min(Table.max_width,self.width), null_field)
     ret += '\n' + (self.fmt % tuple([x.name for x in self.columns])).rstrip()
-    ret += '\n' + ''.ljust(min(Table.max_width,self.width),'-')
+    ret += '\n' + ''.ljust(min(Table.max_width,self.width), null_field)
     return ret
   def __str__(self):
     rows = [self.get_header()]
@@ -375,7 +401,7 @@ class CondorTable(Table):
   def munge(self, name, value):
     ret = value
     if value is None or value == 'undefined':
-      ret = '-'
+      ret = null_field
     elif name == 'Args':
       ret = ' '.join(value.split()[1:])
     elif name == 'ExitBySignal':
@@ -390,7 +416,7 @@ class CondorTable(Table):
         pass
     elif name.endswith('Date'):
       if value == '0' or value == 0:
-        ret = '-'
+        ret = null_field
       else:
         try:
           x = datetime.datetime.fromtimestamp(int(value))
@@ -420,6 +446,7 @@ site_table.add_column('done','done',8,tally='sum')
 site_table.add_column('run','run',8,tally='sum')
 site_table.add_column('idle','idle',8,tally='sum')
 site_table.add_column('held','held',8,tally='sum')
+site_table.add_column('att','attempt',5)
 site_table.add_column('wallhr','wallhr',6)
 
 job_table = CondorTable()
@@ -441,48 +468,57 @@ job_table.add_column('args','Args',30)
 
 if __name__ == '__main__':
 
-  cli = argparse.ArgumentParser(description='Wrap condor_q and condor_history and add features for CLAS12.')
-  cli.add_argument('-condor', default=[], metavar='# or #.#', action='append', type=str, help='limit by condor id')
-  cli.add_argument('-gemc', default=[], metavar='#', action='append', type=str, help='limit by gemc submission id')
-  cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username')
-  cli.add_argument('-site', default=[], action='append', type=str, help='limit by OSG site name (pattern matched)')
+  cli = argparse.ArgumentParser(description='Wrap condor_q and condor_history and add features for CLAS12.',
+      epilog='''Per-site wall-hour tallies ignore running jobs, unless -running is specified.
+                Repeatable "limit" options are first OR\'d independently, then all "limit" options are AND'd together.''')
+  cli.add_argument('-condor', default=[], metavar='# or #.#', action='append', type=str, help='limit by condor id (repeatable)')
+  cli.add_argument('-gemc', default=[], metavar='#', action='append', type=str, help='limit by gemc submission id (repeatable)')
+  cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username (repeatable)')
+  cli.add_argument('-site', default=[], action='append', type=str, help='limit by OSG site name, pattern matched (repeatable)')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
   cli.add_argument('-idle', default=False, action='store_true', help='limit to jobs currently in idle state')
   cli.add_argument('-running', default=False, action='store_true', help='limit to jobs currently in running state')
   cli.add_argument('-completed', default=False, action='store_true', help='limit to completed jobs')
-  cli.add_argument('-hours', default=0, metavar='#', type=int, help='look back # hours for completed jobs (default=0)')
-  cli.add_argument('-tail', default=None, metavar='#', type=int, help='print last # lines of logs (negative=all, 0=filenames)')
-  cli.add_argument('-json', default=False, action='store_true', help='print condor\'s full data in JSON format')
-  cli.add_argument('-cvmfs', default=False, action='store_true', help='print hostnames from logs with CVMFS errors')
   cli.add_argument('-summary', default=False, action='store_true', help='tabulate by cluster id instead of per-job')
   cli.add_argument('-sitesummary', default=False, action='store_true', help='tabulate by site instead of per-job')
+  cli.add_argument('-hours', default=0, metavar='#', type=float, help='look back # hours for completed jobs (default=0)')
+  cli.add_argument('-tail', default=None, metavar='#', type=int, help='print last # lines of logs (negative=all, 0=filenames)')
+  cli.add_argument('-cvmfs', default=False, action='store_true', help='print hostnames from logs with CVMFS errors')
   cli.add_argument('-vacate', default=-1, metavar='#', type=float, help='vacate jobs with wall hours greater than #')
-  #cli.add_argument('-output', default=False, type=str, help='write condor query results to a JSON file')
-  #cli.add_argument('-input', default=False, type=str, help='read condor query results from a JSON file')
+  cli.add_argument('-json', default=False, action='store_true', help='print condor query JSON results')
+  cli.add_argument('-input', default=False, metavar='PATH', type=str, help='read condor query results from a JSON file')
 
   args = cli.parse_args(sys.argv[1:])
+
+  if args.held + args.idle + args.running + args.completed > 1:
+    cli.error('Only one of -held/idle/running/completed is allowed.')
+
+  if (bool(args.vacate>=0) + bool(args.tail is not None) + bool(args.cvmfs) + bool(args.json)) > 1:
+    cli.error('Only one of -cvmfs/vacate/tail/json is allowed.')
+
+  if args.completed and args.hours <= 0:
+    cli.error('-completed requires -hours is greater than zero.')
 
   opts, constraints = [], []
 
   if args.held:
     opts.append('-hold')
-  elif args.running:
-    opts.append('-run')
 
-  if args.completed and args.hours <= 0:
-    cli.error('-completed requires -hours is greater than zero')
+  if args.running:
+    opts.append('-run')
 
   constraints.extend(args.condor)
 
-  #if args.input:
-  #  condor_read_file(args.input)
-  #else:
-  condor_load(constraints=constraints, opts=opts, hours=args.hours, completed=args.completed)
-  #if args.output:
-  #  condor_write_file(args.output)
+  if args.input:
+    condor_read(args.input)
+  else:
+    condor_query(constraints=constraints, opts=opts, hours=args.hours, completed=args.completed)
+
+  if args.json:
+    print(json.dumps(condor_data, **json_format))
+    sys.exit(0)
 
   cvmfs_hosts = []
-  json_data = []
 
   for cid,job in condor_data.items():
 
@@ -499,9 +535,6 @@ if __name__ == '__main__':
       if not check_cvmfs(job):
         if 'LastRemoteHost' in job:
           cvmfs_hosts.append(job.get('MATCH_GLIDEIN_Site')+' '+job['LastRemoteHost']+' '+cid)
-
-    elif args.json:
-      json_data.append(job)
 
     elif args.tail is not None:
       print(''.ljust(80,'#'))
@@ -522,9 +555,6 @@ if __name__ == '__main__':
     if len(cvmfs_hosts) > 0:
       print('\n'.join(cvmfs_hosts))
 
-  elif args.json:
-    print(json.dumps(json_data, **json_format))
-
   elif args.tail is None:
     if len(job_table.rows) > 0:
       if args.summary or args.sitesummary:
@@ -534,4 +564,6 @@ if __name__ == '__main__':
           print(site_table.add_jobs(condor_site_summary(args)))
       else:
         print(job_table)
+
+  sys.exit(0)
 
