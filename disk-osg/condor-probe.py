@@ -133,8 +133,18 @@ def condor_calc_wallhr(job):
       end = datetime.datetime.fromtimestamp(int(end))
     else:
       end = datetime.datetime.now()
-    ret = '%5.1f' % ((end - start).total_seconds()/60/60)
+    ret = '%.1f' % ((end - start).total_seconds()/60/60)
   return ret
+
+###########################################################
+###########################################################
+
+job_counts = {'done':0,'run':0,'idle':0,'held':0,'other':0,'total':0}
+
+def condor_yield(args):
+  for condor_id,job in condor_data.items():
+    if condor_match(job, args):
+      yield (condor_id, job)
 
 def condor_match(job, args):
   ''' Apply job constraints, on top of those condor knows about'''
@@ -164,72 +174,60 @@ def condor_match(job, args):
     return job_states.get(job['JobStatus']) == 'C'
   return True
 
-job_counts = {'done':0,'run':0,'idle':0,'held':0,'other':0,'total':0}
+def get_status_key(job):
+  if job_states[job['JobStatus']] == 'H':
+    return 'held'
+  elif job_states[job['JobStatus']] == 'I':
+    return 'idle'
+  elif job_states[job['JobStatus']] == 'R':
+    return 'run'
+  elif job_states[job['JobStatus']] == 'C':
+    return 'done'
+  else:
+    return 'other'
 
 def condor_cluster_summary(args):
   '''Tally jobs by condor's ClusterId'''
   ret = collections.OrderedDict()
-  for condor_id,job in condor_data.items():
-    if not condor_match(job,args):
-      continue
+  for condor_id,job in condor_yield(args):
     cluster_id = condor_id.split('.').pop(0)
     if cluster_id not in ret:
       ret[cluster_id] = job.copy()
       ret[cluster_id].update(job_counts.copy())
-    if job_states[job['JobStatus']] == 'H':
-      ret[cluster_id]['held'] += 1
-    elif job_states[job['JobStatus']] == 'I':
-      ret[cluster_id]['idle'] += 1
-    elif job_states[job['JobStatus']] == 'R':
-      ret[cluster_id]['run'] += 1
-    else:
-      ret[cluster_id]['other'] += 1
+    ret[cluster_id][get_status_key(job)] += 1
     ret[cluster_id]['done'] = ret[cluster_id]['TotalSubmitProcs']
-    ret[cluster_id]['done'] -= ret[cluster_id]['other']
     ret[cluster_id]['done'] -= ret[cluster_id]['held']
     ret[cluster_id]['done'] -= ret[cluster_id]['idle']
     ret[cluster_id]['done'] -= ret[cluster_id]['run']
   return ret
 
 def condor_site_summary(args):
-  '''Tally jobs by site'''
+  '''Tally jobs by site.  Note, including completed jobs
+  here is only possible if condor_history is included.'''
   sites = collections.OrderedDict()
-  for condor_id,job in condor_data.items():
-    if not condor_match(job,args):
-      continue
+  for condor_id,job in condor_yield(args):
     site = job.get('MATCH_GLIDEIN_Site')
     if site not in sites:
       sites[site] = job.copy()
       sites[site].update(job_counts.copy())
       sites[site]['wallhr'] = []
     sites[site]['total'] += 1
-    if job_states[job['JobStatus']] == 'H':
-      sites[site]['held'] += 1
-    elif job_states[job['JobStatus']] == 'I':
-      sites[site]['idle'] += 1
-    elif job_states[job['JobStatus']] == 'R':
-      sites[site]['run'] += 1
-    elif job_states[job['JobStatus']] == 'C':
-      #sites[site]['done'] += 1
+    sites[site][get_status_key(job)] += 1
+    if job_states[job['JobStatus']] == 'C':
       try:
         x = float(job.get('wallhr'))
         sites[site]['wallhr'].append(x)
       except:
         pass
-    else:
-      sites[site]['other'] += 1
-    sites[site]['done'] = sites[site]['total']
-    #sites[site]['done'] -= sites[site]['other']
-    sites[site]['done'] -= sites[site]['held']
-    sites[site]['done'] -= sites[site]['idle']
-    sites[site]['done'] -= sites[site]['run']
+    if args.hours <= 0:
+      sites[site]['done'] = '-'
   for site in sites.keys():
     if len(sites[site]['wallhr']) > 0:
       x = sum(sites[site]['wallhr'])
       sites[site]['wallhr'] = x / len(sites[site]['wallhr'])
-      sites[site]['wallhr'] = '%5.1f' % sites[site]['wallhr']
+      sites[site]['wallhr'] = '%.1f' % sites[site]['wallhr']
     else:
-      sites[site]['wallhr'] = 'n/a'
+      sites[site]['wallhr'] = '-'
   return sort_dict(sites, 'total')
 
 ###########################################################
@@ -303,7 +301,7 @@ class Column():
     self.fmt = '%%-%d.%ds' % (self.width, self.width)
 
 class Table():
-  max_width = 100
+  max_width = 101
   def __init__(self):
     self.columns = []
     self.rows = []
@@ -328,20 +326,20 @@ class Table():
         except:
           pass
   def values_to_row(self, values):
-    return self.fmt % tuple([str(x) for x in values])
+    return self.fmt % tuple([str(x).strip() for x in values])
   def get_tallies(self):
     # assume it's never appropriate to tally the 1st column
     values = ['tally']
     for i in range(1,len(self.columns)):
-      if self.columns[i].tally is not None:
+      if self.columns[i].tally is not None and len(self.tallies[i]) > 0:
         values.append(sum(self.tallies[i]))
-        if values[-1] > 0:
-          if self.columns[i].tally is 'avg':
+        if self.columns[i].tally is 'avg':
+          if values[-1] > 0:
             values[-1] = '%.1f' % (values[-1]/len(self.tallies[i]))
-          else:
-            values[-1] = int(values[-1])
+        else:
+          values[-1] = int(values[-1])
       else:
-        values.append('')
+        values.append('-')
     return (self.fmt % tuple(values)).rstrip()
   def get_header(self):
     ret = ''.ljust(min(Table.max_width,self.width),'-')
@@ -377,7 +375,7 @@ class CondorTable(Table):
   def munge(self, name, value):
     ret = value
     if value is None or value == 'undefined':
-      ret = 'n/a'
+      ret = '-'
     elif name == 'Args':
       ret = ' '.join(value.split()[1:])
     elif name == 'ExitBySignal':
@@ -392,7 +390,7 @@ class CondorTable(Table):
         pass
     elif name.endswith('Date'):
       if value == '0' or value == 0:
-        ret = 'n/a'
+        ret = '-'
       else:
         try:
           x = datetime.datetime.fromtimestamp(int(value))
@@ -406,8 +404,8 @@ class CondorTable(Table):
 
 summary_table = CondorTable()
 summary_table.add_column('id','ClusterId',11)
-summary_table.add_column('total','TotalSubmitProcs',8,tally='sum')
 summary_table.add_column('submit','QDate',12)
+summary_table.add_column('total','TotalSubmitProcs',8,tally='sum')
 summary_table.add_column('done','done',8,tally='sum')
 summary_table.add_column('run','run',8,tally='sum')
 summary_table.add_column('idle','idle',8,tally='sum')
@@ -422,7 +420,7 @@ site_table.add_column('done','done',8,tally='sum')
 site_table.add_column('run','run',8,tally='sum')
 site_table.add_column('idle','idle',8,tally='sum')
 site_table.add_column('held','held',8,tally='sum')
-site_table.add_column('wallhr','wallhr',8,tally='avg')
+site_table.add_column('wallhr','wallhr',6)
 
 job_table = CondorTable()
 job_table.add_column('id','condorid',14)
@@ -430,7 +428,7 @@ job_table.add_column('site','MATCH_GLIDEIN_Site',10)
 job_table.add_column('stat','JobStatus',4)
 job_table.add_column('exit','ExitCode',4)
 job_table.add_column('sig','ExitBySignal',4)
-job_table.add_column('#','NumJobStarts',3,tally='avg')
+job_table.add_column('#','NumJobStarts',4,tally='avg')
 job_table.add_column('wallhr','wallhr',6,tally='avg')
 job_table.add_column('start','JobCurrentStartDate',12)
 job_table.add_column('end','CompletionDate',12)
