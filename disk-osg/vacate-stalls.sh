@@ -6,7 +6,7 @@ cache=$HOME/vacate-stalls.txt
 
 touch $cache
 
-$dirname/condor-probe.py -vacate 18 >> $cache
+$dirname/condor-probe.py -vacate 16 >> $cache
 
 if ! [ -z $1 ]; then
     if [ $(cat $cache | wc -l) -ne 0 ]; then
