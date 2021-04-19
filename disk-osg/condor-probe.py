@@ -157,16 +157,13 @@ def condor_yield(args):
 
 def condor_match(job, args):
   ''' Apply job constraints, on top of those condor knows about'''
-  if len(args.condor)>0:
-    if job['condor'] not in args.condor:
-      if job['condor'].split('.').pop(0) not in args.condor:
-        return False
-  if len(args.user)>0:
-    if job['user'] not in args.user:
+  if len(args.condor)>0 and job['condor'] not in args.condor:
+    if job['condor'].split('.').pop(0) not in args.condor:
       return False
-  if len(args.gemc)>0:
-    if job['gemc'] not in args.gemc:
-      return False
+  if len(args.user)>0 and job['user'] not in args.user:
+    return False
+  if len(args.gemc)>0 and job['gemc'] not in args.gemc:
+    return False
   if len(args.site) > 0:
     if job.get('MATCH_GLIDEIN_Site') is None:
       return False
@@ -177,14 +174,14 @@ def condor_match(job, args):
         break
     if not matched:
       return False
-  if args.idle:
-    return job_states.get(job['JobStatus']) == 'I'
-  if args.completed:
-    return job_states.get(job['JobStatus']) == 'C'
-  if args.running:
-    return job_states.get(job['JobStatus']) == 'R'
-  if args.held:
-    return job_states.get(job['JobStatus']) == 'H'
+  if args.idle and job_states.get(job['JobStatus']) != 'I':
+    return False
+  if args.completed and job_states.get(job['JobStatus']) != 'C':
+    return False
+  if args.running and job_states.get(job['JobStatus']) != 'R':
+    return False
+  if args.held and job_states.get(job['JobStatus']) != 'H':
+    return False
   return True
 
 def get_status_key(job):
