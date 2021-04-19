@@ -20,9 +20,9 @@ import collections
 
 json_format =  {'indent':2, 'separators':(',',': '), 'sort_keys':True}
 log_regex = '/([a-z]+)/job_([0-9]+)/log/job\.([0-9]+)\.([0-9]+)\.'
-job_states = { 0:'U', 1:'I', 2:'R', 3:'X', 4:'C', 5:'H', 6:'E' }
+job_states = {0:'U', 1:'I', 2:'R', 3:'X', 4:'C', 5:'H', 6:'E'}
+job_counts = {'done':0, 'run':0, 'idle':0, 'held':0, 'other':0, 'total':0}
 null_field = '-'
-
 cvmfs_error_strings = [
   'Loaded environment state is inconsistent',
   'Command not found',
@@ -31,11 +31,10 @@ cvmfs_error_strings = [
 #  'No such file or directory'
 #  'Transport endpoint is not connected',
 ]
-
-###########################################################
-###########################################################
-
 condor_data = None
+
+###########################################################
+###########################################################
 
 def condor_query(constraints=[], opts=[], hours=0, completed=False):
   '''Load data from condor_q and condor_history'''
@@ -81,7 +80,7 @@ def condor_vacate_job(job):
       raise ValueError()
   except:
     print('ERROR running command "%s":\n%s'%(' '.join(cmd),response))
-  print(str(job.get('MATCH_GLIDEIN_Site'))+' '+str(job.get('LastRemoteHost'))+' '+str(job.get('condorid')))
+  print(str(job.get('MATCH_GLIDEIN_Site'))+' '+str(job.get('RemoteHost'))+' '+str(job.get('condorid')))
 
 def condor_q(constraints=[], opts=[]):
   '''Get the JSON from condor_q'''
@@ -107,6 +106,9 @@ def condor_munge():
   '''Assign custom parameters based on parsing some condor parameters'''
   for condor_id,job in condor_data.items():
     job['condorid'] = '%d.%d'%(job['ClusterId'],job['ProcId'])
+    job['host'] = job.get('RemoteHost')
+    if job['host'] is not None:
+      job['host'] = job['host'].split('@').pop()
     job['user'] = None
     job['gemc'] = None
     job['condor'] = None
@@ -147,8 +149,6 @@ def condor_calc_wallhr(job):
 
 ###########################################################
 ###########################################################
-
-job_counts = {'done':0,'run':0,'idle':0,'held':0,'other':0,'total':0}
 
 def condor_yield(args):
   for condor_id,job in condor_data.items():
@@ -199,19 +199,11 @@ def get_status_key(job):
   else:
     return 'other'
 
-def condor_average(dictionary):
-  if len(dictionary['wallhr']) > 0:
-    x = sum(dictionary['wallhr'])
-    dictionary['wallhr'] = x / len(dictionary['wallhr'])
-    dictionary['wallhr'] = '%.1f' % dictionary['wallhr']
+def average(alist):
+  if len(alist) > 0:
+    return '%.1f' % (sum(alist) / len(alist))
   else:
-    dictionary['wallhr'] = null_field
-  if len(dictionary['attempt']) > 0:
-    x = sum(dictionary['attempt'])
-    dictionary['attempt'] = x / len(dictionary['attempt'])
-    dictionary['attempt'] = '%.1f' % dictionary['attempt']
-  else:
-    dictionary['attempt'] = null_field
+    return null_field
 
 def condor_cluster_summary(args):
   '''Tally jobs by condor's ClusterId'''
@@ -226,8 +218,6 @@ def condor_cluster_summary(args):
     ret[cluster_id]['done'] -= ret[cluster_id]['held']
     ret[cluster_id]['done'] -= ret[cluster_id]['idle']
     ret[cluster_id]['done'] -= ret[cluster_id]['run']
-#  for x in ret.values():
-#    condor_average(x)
   return ret
 
 def condor_site_summary(args):
@@ -251,7 +241,8 @@ def condor_site_summary(args):
       except:
         pass
   for site in sites.keys():
-    condor_average(sites[site])
+    sites[site]['wallhr'] = average(sites[site]['wallhr'])
+    sites[site]['attempt'] = average(sites[site]['attempt'])
     if args.hours <= 0:
       sites[site]['done'] = null_field
   return sort_dict(sites, 'total')
@@ -405,10 +396,7 @@ class CondorTable(Table):
     elif name == 'Args':
       ret = ' '.join(value.split()[1:])
     elif name == 'ExitBySignal':
-      if value:
-        ret = 'Y'
-      else:
-        ret = 'N'
+      ret = {True:'Y',False:'N'}[value]
     elif name == 'JobStatus':
       try:
         ret = job_states[value]
@@ -446,16 +434,16 @@ site_table.add_column('done','done',8,tally='sum')
 site_table.add_column('run','run',8,tally='sum')
 site_table.add_column('idle','idle',8,tally='sum')
 site_table.add_column('held','held',8,tally='sum')
-site_table.add_column('att','attempt',5)
 site_table.add_column('wallhr','wallhr',6)
 
 job_table = CondorTable()
 job_table.add_column('id','condorid',14)
 job_table.add_column('site','MATCH_GLIDEIN_Site',10)
+#job_table.add_column('host','host',20)
 job_table.add_column('stat','JobStatus',4)
 job_table.add_column('exit','ExitCode',4)
 job_table.add_column('sig','ExitBySignal',4)
-job_table.add_column('#','NumJobStarts',4,tally='avg')
+job_table.add_column('att','NumJobStarts',4,tally='avg')
 job_table.add_column('wallhr','wallhr',6,tally='avg')
 job_table.add_column('start','JobCurrentStartDate',12)
 job_table.add_column('end','CompletionDate',12)
