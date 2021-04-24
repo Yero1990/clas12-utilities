@@ -99,6 +99,9 @@ def should_delete_dir(path):
 # Finally, crawl the filesystem and do stuff:
 # some directories may become empty along the way,
 # so we iterate until nothing gets deleted:
+
+deletes = []
+
 while True:
 
   delete_happened = False
@@ -120,6 +123,7 @@ while True:
       fullfilepath = dirpath+'/'+filename
       if should_delete_file(fullfilepath):
         print(fullfilepath)
+        deletes.append(fullfilepath)
         if not args.dryrun:
           if args.gzip:
             if not path.endswith('.gz'):
@@ -134,6 +138,7 @@ while True:
       fulldirpath = dirpath+'/'+dirname
       if should_delete_dir(fulldirpath):
         print(fulldirpath)
+        deletes.append(fullfilepath)
         if not args.dryrun:
           os.rmdir(fulldirpath)
           delete_happened = True
@@ -147,4 +152,9 @@ while True:
   # (for a dryrun, we can't iterate to find empties, so also stop)
   if not delete_happened or args.dryrun:
     break
+
+if args.dryrun:
+  print('Would have deleted %d things.'%len(deletes))
+else:
+  print('Deleted %d things.'%len(deletes))
 
