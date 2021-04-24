@@ -13,6 +13,7 @@ import sys
 import glob
 import json
 import time
+import math
 import argparse
 import datetime
 import subprocess
@@ -202,6 +203,14 @@ def average(alist):
   else:
     return null_field
 
+def stddev(alist):
+  if len(alist) > 0:
+    m = average(alist)
+    s = sum([ (x-float(m))*(x-float(m)) for x in alist ])
+    return '%.1f' % math.sqrt(s / len(alist))
+  else:
+    return null_field
+
 def condor_cluster_summary(args):
   '''Tally jobs by condor's ClusterId'''
   ret = collections.OrderedDict()
@@ -238,6 +247,8 @@ def condor_site_summary(args):
       except:
         pass
   for site in sites.keys():
+    sites[site]['ewallhr'] = stddev(sites[site]['wallhr'])
+    sites[site]['eattempt'] = stddev(sites[site]['attempt'])
     sites[site]['wallhr'] = average(sites[site]['wallhr'])
     sites[site]['attempt'] = average(sites[site]['attempt'])
     if args.hours <= 0:
@@ -267,6 +278,11 @@ def sort_dict(dictionary, subkey):
   for x in ordered_keys:
     ret[x] = dictionary[x]
   return ret
+
+def readlines(filename):
+  with open(filename) as f:
+    for line in f.readlines():
+      yield line.strip()
 
 def readlines_reverse(filename, max_lines):
   '''Get the trailing lines from a file, stopping
@@ -432,6 +448,7 @@ site_table.add_column('run','run',8,tally='sum')
 site_table.add_column('idle','idle',8,tally='sum')
 site_table.add_column('held','held',8,tally='sum')
 site_table.add_column('wallhr','wallhr',6)
+site_table.add_column('stddev','ewallhr',7)
 
 job_table = CondorTable()
 job_table.add_column('id','condorid',14)
@@ -530,8 +547,11 @@ if __name__ == '__main__':
         if x is not None and os.path.isfile(x):
           print(''.ljust(80,'>'))
           print(x)
-          if args.tail != 0:
+          if args.tail > 0:
             print('\n'.join(reversed(list(readlines_reverse(x, args.tail)))))
+          elif args.tail < 0:
+            for x in readlines(x):
+              print(x)
 
     else:
       job_table.add_job(job)
