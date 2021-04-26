@@ -8,7 +8,7 @@ import math
 import argparse
 import subprocess
 
-protected_dir = '/osgpool/hallb/clas12/gemc'
+protected_dirs = [ '/osgpool/hallb/clas12/gemc' , '/volatile/clas12/osg2' ]
 default_ignores = [ '^.*\.hipo$', '^.*/job_[0-9]+/nodeScript.sh$' ]
 default_trashes = [ '.*\.root$', '.*\.evio$', '^core\.*' ]
 
@@ -101,6 +101,7 @@ def should_delete_dir(path):
 # so we iterate until nothing gets deleted:
 
 deletes = []
+cycles = 0
 
 while True:
 
@@ -112,7 +113,7 @@ while True:
 
     # don't delete anything at the top level within protected_dir:
     # (this is to avoid race conditions from the OSG submit portal)
-    if dirpath == protected_dir:
+    if dirpath in protected_dirs:
       continue
 
     # store the top directory's modification time:
@@ -138,7 +139,7 @@ while True:
       fulldirpath = dirpath+'/'+dirname
       if should_delete_dir(fulldirpath):
         print(fulldirpath)
-        deletes.append(fullfilepath)
+        deletes.append(fulldirpath)
         if not args.dryrun:
           os.rmdir(fulldirpath)
           delete_happened = True
@@ -152,6 +153,10 @@ while True:
   # (for a dryrun, we can't iterate to find empties, so also stop)
   if not delete_happened or args.dryrun:
     break
+
+  else:
+    cycles += 1
+    print('Cycle #%d to find empty directories ...'%(cycles+1))
 
 if args.dryrun:
   print('Would have deleted %d things.'%len(deletes))
