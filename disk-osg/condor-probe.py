@@ -498,8 +498,8 @@ if __name__ == '__main__':
   if (bool(args.vacate>=0) + bool(args.tail is not None) + bool(args.cvmfs) + bool(args.json)) > 1:
     cli.error('Only one of -cvmfs/vacate/tail/json is allowed.')
 
-  if args.completed and args.hours <= 0:
-    cli.error('-completed requires -hours is greater than zero.')
+  if args.completed and args.hours <= 0 and not args.input:
+    cli.error('-completed requires -hours is greater than zero or -input.')
 
   opts, constraints = [], []
 
