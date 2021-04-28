@@ -110,6 +110,7 @@ def condor_munge():
     job['host'] = job.get('RemoteHost')
     if job['host'] is not None:
       job['host'] = job['host'].split('@').pop()
+    job['generator'] = get_generator(job)
     job['user'] = None
     job['gemc'] = None
     job['condor'] = None
@@ -126,6 +127,8 @@ def condor_munge():
         if condor_id != job['condor']:
           raise ValueError('condor ids do not match.')
     job['wallhr'] = condor_calc_wallhr(job)
+    args = job.get('Args').split()
+    job['gemcjob'] = '.'.join(args[0:2])
 
 def condor_calc_wallhr(job):
   '''Use available info to calculate wall hours, since there does
@@ -161,9 +164,10 @@ def condor_match(job, args):
   if len(args.condor)>0 and job['condor'] not in args.condor:
     if job['condor'].split('.').pop(0) not in args.condor:
       return False
-  if len(args.user)>0 and job['user'] not in args.user:
-    return False
   if len(args.gemc)>0 and job['gemc'] not in args.gemc:
+    if job['gemcjob'] not in args.gemc:
+      return False
+  if len(args.user)>0 and job['user'] not in args.user:
     return False
   if len(args.site) > 0:
     if job.get('MATCH_GLIDEIN_Site') is None:
@@ -309,6 +313,9 @@ def readlines_reverse(filename, max_lines):
       position -= 1
   yield line[::-1]
 
+###########################################################
+###########################################################
+
 def check_cvmfs(job):
   ''' Return wether a CVMFS error is detected'''
   if job.get('stderr') is not None:
@@ -319,6 +326,24 @@ def check_cvmfs(job):
             if line.find(x) >= 0:
               return False
   return True
+
+# cache generator names to only parse log once per cluster
+generators = {}
+def get_generator(job):
+  if job.get('ClusterId') not in generators:
+    generators['ClusterId'] = null_field
+    if job.get('UserLog') is not None:
+      job_script = os.path.dirname(os.path.dirname(job.get('UserLog')))+'/nodeScript.sh'
+      if os.path.isfile(job_script):
+        for line in readlines(job_script):
+          m = re.search('events with generator >(.*)< with options', line)
+          if m is not None:
+            generators['ClusterId'] = m.group(1)
+            break
+          if line.find('echo LUND Event File:') == 0:
+            generators['ClusterId'] = 'lund'
+            break
+  return generators.get('ClusterId')
 
 ###########################################################
 ###########################################################
@@ -331,7 +356,7 @@ class Column():
     self.fmt = '%%-%d.%ds' % (self.width, self.width)
 
 class Table():
-  max_width = 101
+  max_width = 114
   def __init__(self):
     self.columns = []
     self.rows = []
@@ -407,7 +432,7 @@ class CondorTable(Table):
     if value is None or value == 'undefined':
       ret = null_field
     elif name == 'Args':
-      ret = ' '.join(value.split()[1:])
+      ret = ' '.join(value.split()[2:])
     elif name == 'ExitBySignal':
       ret = {True:'Y',False:'N'}[value]
     elif name == 'JobStatus':
@@ -430,7 +455,8 @@ class CondorTable(Table):
 ###########################################################
 
 summary_table = CondorTable()
-summary_table.add_column('id','ClusterId',11)
+summary_table.add_column('condor','ClusterId',9)
+summary_table.add_column('gemc','gemc',6)
 summary_table.add_column('submit','QDate',12)
 summary_table.add_column('total','TotalSubmitProcs',8,tally='sum')
 summary_table.add_column('done','done',8,tally='sum')
@@ -438,7 +464,7 @@ summary_table.add_column('run','run',8,tally='sum')
 summary_table.add_column('idle','idle',8,tally='sum')
 summary_table.add_column('held','held',8,tally='sum')
 summary_table.add_column('user','user',10)
-summary_table.add_column('gemc','gemc',6)
+summary_table.add_column('gen','generator',9)
 
 site_table = CondorTable()
 site_table.add_column('site','MATCH_GLIDEIN_Site',26)
@@ -451,7 +477,8 @@ site_table.add_column('wallhr','wallhr',6)
 site_table.add_column('stddev','ewallhr',7)
 
 job_table = CondorTable()
-job_table.add_column('id','condorid',14)
+job_table.add_column('condor','condorid',13)
+job_table.add_column('gemc','gemc',6)
 job_table.add_column('site','MATCH_GLIDEIN_Site',10)
 #job_table.add_column('host','host',20)
 job_table.add_column('stat','JobStatus',4)
@@ -462,8 +489,8 @@ job_table.add_column('wallhr','wallhr',6,tally='avg')
 job_table.add_column('start','JobCurrentStartDate',12)
 job_table.add_column('end','CompletionDate',12)
 job_table.add_column('user','user',10)
-job_table.add_column('gemc','gemc',6)
-job_table.add_column('args','Args',30)
+job_table.add_column('gen','generator',9)
+#job_table.add_column('args','Args',30)
 
 ###########################################################
 ###########################################################
