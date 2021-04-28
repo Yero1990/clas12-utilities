@@ -338,7 +338,10 @@ def get_generator(job):
         for line in readlines(job_script):
           m = re.search('events with generator >(.*)< with options', line)
           if m is not None:
-            generators['ClusterId'] = m.group(1)
+            if m.group(1).startswith('clas12-'):
+              generators['ClusterId'] = m.group(1)[7:]
+            else:
+              generators['ClusterId'] = m.group(1)
             break
           if line.find('echo LUND Event File:') == 0:
             generators['ClusterId'] = 'lund'
