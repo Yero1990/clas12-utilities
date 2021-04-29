@@ -14,6 +14,8 @@ import glob
 import json
 import time
 import math
+import socket
+import getpass
 import argparse
 import datetime
 import subprocess
@@ -348,6 +350,26 @@ def get_generator(job):
             break
   return generators.get('ClusterId')
 
+def clas12mon(args):
+  data = job_counts.copy()
+  for job in condor_cluster_summary(args).values():
+    for x in data.keys():
+      data[x] += job[x]
+  data.pop('done')
+  data.pop('total')
+  data['update_ts'] = int(datetime.datetime.now().timestamp())
+  print(json.dumps(data, **json_format))
+  return
+  if getpass.getuser() is not 'gemc':
+    print('ERROR:  Only user=gemc can publish to clas12mon.')
+    sys.exit(1)
+  auth = os.getenv('HOME')+'/.clas12mon.auth'
+  if not os.path.isfile(auth):
+    print('ERROR:  Authorization file does not exist:  '+auth)
+  url = 'https://clas12mon.jlab.org/api/OSGEntries'
+  auth = open(auth).read().strip()
+  return requests.post(url, data=data, headers={'Authorization':auth})
+
 ###########################################################
 ###########################################################
 
@@ -519,6 +541,7 @@ if __name__ == '__main__':
   cli.add_argument('-vacate', default=-1, metavar='#', type=float, help='vacate jobs with wall hours greater than #')
   cli.add_argument('-json', default=False, action='store_true', help='print condor query JSON results')
   cli.add_argument('-input', default=False, metavar='PATH', type=str, help='read condor query results from a JSON file')
+  cli.add_argument('-clas12mon', default=False, action='store_true', help='publish results to clas12mon for timelines')
 
   args = cli.parse_args(sys.argv[1:])
 
@@ -530,6 +553,9 @@ if __name__ == '__main__':
 
   if args.completed and args.hours <= 0 and not args.input:
     cli.error('-completed requires -hours is greater than zero or -input.')
+
+  if socket.gethostname() != 'scosg16.jlab.org' and not args.input:
+    cli.error('You must be on scosg16 unless using the -input option.')
 
   opts, constraints = [], []
 
@@ -545,6 +571,10 @@ if __name__ == '__main__':
     condor_read(args.input)
   else:
     condor_query(constraints=constraints, opts=opts, hours=args.hours, completed=args.completed)
+
+  if args.clas12mon:
+    clas12mon(args)
+    sys.exit(0)
 
   if args.json:
     print(json.dumps(condor_data, **json_format))
