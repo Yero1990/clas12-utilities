@@ -34,15 +34,14 @@ cvmfs_error_strings = [
 #  'No such file or directory'
 #  'Transport endpoint is not connected',
 ]
-condor_data = None
 
 ###########################################################
 ###########################################################
+
+condor_data = collections.OrderedDict()
 
 def condor_query(constraints=[], opts=[], hours=0, completed=False):
   '''Load data from condor_q and condor_history'''
-  global condor_data
-  condor_data = collections.OrderedDict()
   if not completed:
     condor_q(constraints=constraints, opts=opts)
   if hours > 0:
@@ -95,7 +94,6 @@ def condor_q(constraints=[], opts=[]):
 
 def condor_history(constraints=[], hours=1):
   '''Get the JSON from condor_history'''
-  global condor_data
   now = datetime.datetime.now()
   start = now + datetime.timedelta(hours = -hours)
   start = str(int(start.timestamp()))
@@ -108,16 +106,18 @@ def condor_history(constraints=[], hours=1):
 def condor_munge():
   '''Assign custom parameters based on parsing some condor parameters'''
   for condor_id,job in condor_data.items():
-    job['condorid'] = '%d.%d'%(job['ClusterId'],job['ProcId'])
-    job['host'] = job.get('RemoteHost')
-    if job['host'] is not None:
-      job['host'] = job['host'].split('@').pop()
-    job['generator'] = get_generator(job)
     job['user'] = None
     job['gemc'] = None
+    job['host'] = None
     job['condor'] = None
     job['stderr'] = None
     job['stdout'] = None
+    job['generator'] = get_generator(job)
+    job['wallhr'] = condor_calc_wallhr(job)
+    job['condorid'] = '%d.%d'%(job['ClusterId'],job['ProcId'])
+    job['gemcjob'] = '.'.join(job.get('Args').split()[0:2])
+    if job.get('RemoteHost') is not None:
+      job['host'] = job.get('RemoteHost').split('@').pop()
     if 'UserLog' in job:
       m = re.search(log_regex, job['UserLog'])
       if m is not None:
@@ -128,9 +128,6 @@ def condor_munge():
         job['stdout'] = job['UserLog'][0:-4]+'.out'
         if condor_id != job['condor']:
           raise ValueError('condor ids do not match.')
-    job['wallhr'] = condor_calc_wallhr(job)
-    args = job.get('Args').split()
-    job['gemcjob'] = '.'.join(args[0:2])
 
 def condor_calc_wallhr(job):
   '''Use available info to calculate wall hours, since there does
@@ -286,15 +283,17 @@ def sort_dict(dictionary, subkey):
   return ret
 
 def readlines(filename):
-  with open(filename) as f:
-    for line in f.readlines():
-      yield line.strip()
+  if filename is not None:
+    if os.path.isfile(filename):
+      with open(filename, errors='replace') as f:
+        for line in f.readlines():
+          yield line.strip()
 
 def readlines_reverse(filename, max_lines):
   '''Get the trailing lines from a file, stopping
   after max_lines unless max_lines is negative'''
   n_lines = 0
-  with open(filename) as qfile:
+  with open(filename, errors='replace') as qfile:
     qfile.seek(0, os.SEEK_END)
     position = qfile.tell()
     line = ''
@@ -302,10 +301,7 @@ def readlines_reverse(filename, max_lines):
       if n_lines > max_lines and max_lines>0:
         break
       qfile.seek(position)
-      try:
-        next_char = qfile.read(1)
-      except:
-        next_char = '?'
+      next_char = qfile.read(1)
       if next_char == "\n":
          n_lines += 1
          yield line[::-1]
@@ -320,13 +316,10 @@ def readlines_reverse(filename, max_lines):
 
 def check_cvmfs(job):
   ''' Return wether a CVMFS error is detected'''
-  if job.get('stderr') is not None:
-    if os.path.isfile(job['stderr']):
-      with open(job['stderr'],'r',errors='replace') as f:
-        for line in f.readlines():
-          for x in cvmfs_error_strings:
-            if line.find(x) >= 0:
-              return False
+  for line in readlines(job.get('stderr')):
+    for x in cvmfs_error_strings:
+      if line.find(x) >= 0:
+        return False
   return True
 
 # cache generator names to only parse log once per cluster
@@ -336,18 +329,17 @@ def get_generator(job):
     generators['ClusterId'] = null_field
     if job.get('UserLog') is not None:
       job_script = os.path.dirname(os.path.dirname(job.get('UserLog')))+'/nodeScript.sh'
-      if os.path.isfile(job_script):
-        for line in readlines(job_script):
-          m = re.search('events with generator >(.*)< with options', line)
-          if m is not None:
-            if m.group(1).startswith('clas12-'):
-              generators['ClusterId'] = m.group(1)[7:]
-            else:
-              generators['ClusterId'] = m.group(1)
-            break
-          if line.find('echo LUND Event File:') == 0:
-            generators['ClusterId'] = 'lund'
-            break
+      for line in readlines(job_script):
+        m = re.search('events with generator >(.*)< with options', line)
+        if m is not None:
+          if m.group(1).startswith('clas12-'):
+            generators['ClusterId'] = m.group(1)[7:]
+          else:
+            generators['ClusterId'] = m.group(1)
+          break
+        if line.find('echo LUND Event File:') == 0:
+          generators['ClusterId'] = 'lund'
+          break
   return generators.get('ClusterId')
 
 def clas12mon(args):
@@ -369,6 +361,21 @@ def clas12mon(args):
   url = 'https://clas12mon.jlab.org/api/OSGEntries'
   auth = open(auth).read().strip()
   return requests.post(url, data=data, headers={'Authorization':auth})
+
+def tail_log(job, nlines):
+  print(''.ljust(80,'#'))
+  print(''.ljust(80,'#'))
+  print(job_table.get_header())
+  print(job_table.job_to_row(job))
+  for x in (job['UserLog'],job['stdout'],job['stderr']):
+    if x is not None and os.path.isfile(x):
+      print(''.ljust(80,'>'))
+      print(x)
+      if args.tail > 0:
+        print('\n'.join(reversed(list(readlines_reverse(x, args.tail)))))
+      elif args.tail < 0:
+        for x in readlines(x):
+          print(x)
 
 ###########################################################
 ###########################################################
@@ -526,7 +533,7 @@ if __name__ == '__main__':
       epilog='''Per-site wall-hour tallies ignore running jobs, unless -running is specified.
                 Repeatable "limit" options are first OR\'d independently, then all "limit" options are AND'd together.''')
   cli.add_argument('-condor', default=[], metavar='# or #.#', action='append', type=str, help='limit by condor id (repeatable)')
-  cli.add_argument('-gemc', default=[], metavar='#', action='append', type=str, help='limit by gemc submission id (repeatable)')
+  cli.add_argument('-gemc', default=[], metavar='# or #.#', action='append', type=str, help='limit by gemc submission id (repeatable)')
   cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username (repeatable)')
   cli.add_argument('-site', default=[], action='append', type=str, help='limit by OSG site name, pattern matched (repeatable)')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
@@ -539,8 +546,8 @@ if __name__ == '__main__':
   cli.add_argument('-tail', default=None, metavar='#', type=int, help='print last # lines of logs (negative=all, 0=filenames)')
   cli.add_argument('-cvmfs', default=False, action='store_true', help='print hostnames from logs with CVMFS errors')
   cli.add_argument('-vacate', default=-1, metavar='#', type=float, help='vacate jobs with wall hours greater than #')
-  cli.add_argument('-json', default=False, action='store_true', help='print condor query JSON results')
-  cli.add_argument('-input', default=False, metavar='PATH', type=str, help='read condor query results from a JSON file')
+  cli.add_argument('-json', default=False, action='store_true', help='print full condor data in JSON format')
+  cli.add_argument('-input', default=False, metavar='PATH', type=str, help='read condor data from a JSON file instead of querying')
   cli.add_argument('-clas12mon', default=False, action='store_true', help='publish results to clas12mon for timelines')
 
   args = cli.parse_args(sys.argv[1:])
@@ -580,12 +587,7 @@ if __name__ == '__main__':
     print(json.dumps(condor_data, **json_format))
     sys.exit(0)
 
-  cvmfs_hosts = []
-
-  for cid,job in condor_data.items():
-
-    if not condor_match(job, args):
-      continue
+  for cid,job in condor_yield(args):
 
     if args.vacate>0:
       if job.get('wallhr') is not None:
@@ -596,31 +598,15 @@ if __name__ == '__main__':
     elif args.cvmfs:
       if not check_cvmfs(job):
         if 'LastRemoteHost' in job:
-          cvmfs_hosts.append(job.get('MATCH_GLIDEIN_Site')+' '+job['LastRemoteHost']+' '+cid)
+          print(job.get('MATCH_GLIDEIN_Site')+' '+job['LastRemoteHost']+' '+cid)
 
     elif args.tail is not None:
-      print(''.ljust(80,'#'))
-      print(''.ljust(80,'#'))
-      print(job_table.get_header())
-      print(job_table.job_to_row(job))
-      for x in (job['UserLog'],job['stdout'],job['stderr']):
-        if x is not None and os.path.isfile(x):
-          print(''.ljust(80,'>'))
-          print(x)
-          if args.tail > 0:
-            print('\n'.join(reversed(list(readlines_reverse(x, args.tail)))))
-          elif args.tail < 0:
-            for x in readlines(x):
-              print(x)
+      tail_log(job, args.tail)
 
     else:
       job_table.add_job(job)
 
-  if args.cvmfs:
-    if len(cvmfs_hosts) > 0:
-      print('\n'.join(cvmfs_hosts))
-
-  elif args.tail is None:
+  if args.tail is None and not args.cvmfs:
     if len(job_table.rows) > 0:
       if args.summary or args.sitesummary:
         if args.summary:
