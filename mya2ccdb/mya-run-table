@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+
+import re
+import sys
+import argparse
+
+from MyaData import MyaData
+
+cli=argparse.ArgumentParser(description='Extract run averages for a PV from Mya EPICS archive.')
+cli.add_argument('-start',metavar='YYYY-MM-DD_HH:MM:SS',help='start date',type=str,required=True)
+cli.add_argument('-end',metavar='YYYY-MM-DD_HH:MM:SS',help='end date',type=str,required=True)
+cli.add_argument('-pv',help='PV name',type=str,required=True)
+
+args=cli.parse_args(sys.argv[1:])
+
+fmt='^\d\d\d\d-\d\d-\d\d_\d\d:\d\d:\d\d$'
+
+mm=re.match(fmt,args.start)
+if mm is None: cli.error('Invalid start date format (must be YYYY-MM-DD_HH:MM:SS): '+args.start)
+mm=re.match(fmt,args.end)
+if mm is None: cli.error('Invalid end date format (must be YYYY-MM-DD_HH:MM:SS): '+args.end)
+args.start = args.start.replace('_',' ')
+args.end = args.end.replace('_',' ')
+
+myaData = MyaData(args.start,args.end)
+myaData.addPv('B_DAQ:run_number')
+myaData.addPv(args.pv)
+
+runs = {}
+
+for d in myaData.get():
+  try:
+    r = int(d.getValue('B_DAQ:run_number'))
+    if r not in runs:
+      runs[r] = []
+    runs[r].append(float(d.getValue(args.pv)))
+  except:
+    pass
+
+#print(runs)
+
+for r,v in runs.items():
+  if len(v) > 0:
+    print('%.07d %.5f'%(r,sum(v)/len(v)))
+

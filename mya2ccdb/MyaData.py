@@ -24,6 +24,8 @@ class MyaDatum:
       return self.pvs[name]
     else:
       return None
+  def __str__(self):
+    print(str(self.date),str(self.time),str(self.pvs))
 
 class MyaData:
   def __init__(self,start=None,end=None):
@@ -41,7 +43,6 @@ class MyaData:
   def setEnd(self,end):
     self.end=str(end)
   def get(self):
-    data=[]
     cmd=['myData','-b',self.start,'-e',self.end,'-i']
     cmd.extend([pv.getMyaDataArg() for pv in self.pvs])
     for line in subprocess.check_output(cmd).splitlines():
@@ -51,7 +52,5 @@ class MyaData:
         md=MyaDatum(date,time)
         for ii in range(2,len(columns)):
           md.addPv(self.pvs[ii-2].name,columns[ii])
-        data.append(md)
-    return data
-
+        yield(md)
 
