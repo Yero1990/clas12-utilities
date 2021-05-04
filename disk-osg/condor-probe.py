@@ -76,6 +76,7 @@ def condor_add_json(cmd):
 
 def condor_vacate_job(job):
   cmd = ['condor_vacate_job', '-fast', job.get('condorid')]
+  response = None
   try:
     response = subprocess.check_output(cmd).decode('UTF-8').rstrip()
     if re.fullmatch('Job %s fast-vacated'%job.get('condorid'), response) is None:
