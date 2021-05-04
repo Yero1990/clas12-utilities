@@ -55,7 +55,7 @@ dest=$user@$remotehost:$remotepath
 rsync_minutes=60
 
 # files older than this will be deleted from $srcdir:
-delete_days=14
+delete_days=10
 
 # script name and absolute path containing this script:
 scriptname=$(basename $0)
