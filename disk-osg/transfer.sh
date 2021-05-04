@@ -180,7 +180,7 @@ pushd $srcdir > /dev/null
 
 # transfer *.hipo data files older than some minutes:
 
-find . -type f -cmin +$rsync_minutes -name '*.hipo' > $tmpfile 2>&1 | $tee
+find . -mindepth 5 -maxdepth 5 -type f -cmin +$rsync_minutes -name '*.hipo' > $tmpfile 2>&1 | $tee
 [ $? -ne 0 ] && echo "$errmsg find *.hipo failed, aborting." | $tee && exit 5
 
 if [ -s $tmpfile ]; then
@@ -198,7 +198,7 @@ if [ -s $tmpfile ]; then
   # transfer the top-level nodeScript.sh from each submission:
   # (one day we can remove this, after job specifications are in HIPO)
 
-  find . -type f -cmin +$rsync_minutes -regex '.*/job_[0-9]+/nodeScript\.sh' > $tmpfile 2>&1 | $tee
+  find . -mindepth 3 -maxdepth 3 -type f -cmin +$rsync_minutes -name 'nodeScript.sh' > $tmpfile 2>&1 | $tee
   [ $? -ne 0 ] && echo "$errmsg find nodeScript failed, aborting." | $tee && exit 7
 
   if [ -s $tmpfile ]; then
