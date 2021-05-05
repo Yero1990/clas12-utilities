@@ -72,6 +72,7 @@ errmsg="ERROR:  $scriptname: "
 warnmsg="WARNING:  $scriptname: "
 infomsg="INFO:  $scriptname: "
 tee="tee -a $logfile"
+datefmt='%Y-%m-%d\ %H:%M:%S'
 
 ########################################################################
 # Interpret command line:
@@ -116,6 +117,10 @@ function cleanup {
   rm -f $tmpfile
 }
 trap cleanup EXIT
+
+function dateit {
+  date +$infomsg\ $1:\ $datefmt 2>&1 | $tee
+}
 
 function check_duplicates {
   if [ "$(pgrep -c -u $user -f "rsync.*$user@$remotehost")" -eq 0 ]; then
@@ -180,17 +185,20 @@ pushd $srcdir > /dev/null
 
 # transfer *.hipo data files older than some minutes:
 
+dateit FINDHIPO
 find . -mindepth 5 -maxdepth 5 -type f -cmin +$rsync_minutes -name '*.hipo' > $tmpfile 2>&1 | $tee
 [ $? -ne 0 ] && echo "$errmsg find *.hipo failed, aborting." | $tee && exit 5
 
 if [ -s $tmpfile ]; then
 
   echo "$infomsg Files to Transfer:" >> $logfile ; cat $tmpfile >> $logfile
+  dateit RSYNCHIPO1
   rsync -a -R --files-from=$tmpfile $rsync_opts $srcdir $dest 2>&1 | $tee
   [ $? -ne 0 ] && echo "$errmsg rsync *.hipo failed, aborting." | $tee && exit 6
 
   # first rsync claimed sucess, run it again with local deletion:
   if [ $dryrun -eq 0 ]; then
+    dateit RSYNCHIPO2
     rsync -a -R --remove-source-files --files-from=$tmpfile $rsync_opts $srcdir $dest 2>&1 | $tee
     [ $? -ne 0 ] && echo "$errmsg rsync *.hipo failed, aborting." | $tee && exit 6
   fi
@@ -198,10 +206,12 @@ if [ -s $tmpfile ]; then
   # transfer the top-level nodeScript.sh from each submission:
   # (one day we can remove this, after job specifications are in HIPO)
 
+  dateit FINDSCRIPT
   find . -mindepth 3 -maxdepth 3 -type f -cmin +$rsync_minutes -name 'nodeScript.sh' > $tmpfile 2>&1 | $tee
   [ $? -ne 0 ] && echo "$errmsg find nodeScript failed, aborting." | $tee && exit 7
 
   if [ -s $tmpfile ]; then
+    dateit RSYNCSCRIPT
     rsync -a -R --files-from=$tmpfile $rsync_opts $srcdir $dest 2>&1 | $tee
     [ $? -ne 0 ] && echo "$errmsg rsync nodeScript failed, aborting." | $tee && exit 8
   fi
@@ -221,6 +231,7 @@ opts="-path $srcdir -delete $delete_days -empty $delete_days -trash 2"
 if [ $dryrun -ne 0 ]; then
     opts="$opts -dryrun"
 fi
+dateit CLEANUP
 echo "$infomsg Files to Delete:" >> $logfile
 $dirname/disk-cleanup.py $opts 2>&1 >> $logfile
 [ $? -ne 0 ] && echo "$errmsg disk-cleanup.py failed." | $tee
@@ -231,5 +242,6 @@ $dirname/disk-cleanup.py $opts 2>&1 >> $logfile
 
 [ $dryrun -ne 0 ] && cat $logfile
 
+dateit DONE
 exit 0
 
