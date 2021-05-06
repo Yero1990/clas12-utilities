@@ -118,8 +118,8 @@ function cleanup {
 trap cleanup EXIT
 
 function dateit {
-  echo "$infomsg $@:" >> $logfile
-  date +%Y-%m-%d\ %H:%M:%S >> $logfile
+  d=`date +%Y-%m-%d\ %H:%M:%S`
+  echo "$infomsg $@ - $d" >> $logfile
 }
 
 function check_duplicates {
