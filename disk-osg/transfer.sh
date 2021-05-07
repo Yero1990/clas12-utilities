@@ -194,13 +194,13 @@ if [ -s $tmpfile ]; then
 
   echo "$infomsg Files to Transfer:" >> $logfile ; cat $tmpfile >> $logfile
   dateit RSYNC HIPO1
-  rsync -a -R --files-from=$tmpfile $rsync_opts $srcdir $dest 2>&1 | $tee
+  rsync -a -R --files-from=$tmpfile $rsync_opts $srcdir $dest >> $logfile
   [ $? -ne 0 ] && echo "$errmsg rsync *.hipo failed, aborting." | $tee && exit 6
 
   # first rsync claimed sucess, run it again with local deletion:
   if [ $dryrun -eq 0 ]; then
     dateit RSYNC HIPO2
-    rsync -a -R --remove-source-files --files-from=$tmpfile $rsync_opts $srcdir $dest 2>&1 | $tee
+    rsync -a -R --remove-source-files --files-from=$tmpfile $rsync_opts $srcdir $dest >> $logfile
     [ $? -ne 0 ] && echo "$errmsg rsync *.hipo failed, aborting." | $tee && exit 6
   fi
 
@@ -213,7 +213,7 @@ if [ -s $tmpfile ]; then
 
   if [ -s $tmpfile ]; then
     dateit RSYNC SCRIPT
-    rsync -a -R --files-from=$tmpfile $rsync_opts $srcdir $dest 2>&1 | $tee
+    rsync -a -R --files-from=$tmpfile $rsync_opts $srcdir $dest >> $logfile
     [ $? -ne 0 ] && echo "$errmsg rsync nodeScript failed, aborting." | $tee && exit 8
   fi
 
