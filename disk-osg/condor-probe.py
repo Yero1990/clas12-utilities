@@ -85,6 +85,15 @@ def condor_vacate_job(job):
     print('ERROR running command "%s":\n%s'%(' '.join(cmd),response))
   print(str(job.get('MATCH_GLIDEIN_Site'))+' '+str(job.get('RemoteHost'))+' '+str(job.get('condorid')))
 
+def condor_hold_job(job):
+  cmd = ['condor_hold', job.get('condorid')]
+  response = None
+  try:
+    response = subprocess.check_output(cmd).decode('UTF-8').rstrip()
+    print(response)
+  except:
+    print('ERROR running command "%s":\n%s'%(' '.join(cmd),response))
+
 def condor_q(constraints=[], opts=[]):
   '''Get the JSON from condor_q'''
   cmd = ['condor_q','gemc']
@@ -113,6 +122,7 @@ def condor_munge():
     job['condor'] = None
     job['stderr'] = None
     job['stdout'] = None
+    job['efficiency'] = None
     job['generator'] = get_generator(job)
     job['wallhr'] = condor_calc_wallhr(job)
     job['condorid'] = '%d.%d'%(job['ClusterId'],job['ProcId'])
@@ -129,6 +139,8 @@ def condor_munge():
         job['stdout'] = job['UserLog'][0:-4]+'.out'
         if condor_id != job['condor']:
           raise ValueError('condor ids do not match.')
+    if job.get('RemoteWallClockTime') > 0:
+      job['efficiency'] = float(job.get('RemoteUserCpu'))/job.get('RemoteWallClockTime')
 
 def condor_calc_wallhr(job):
   '''Use available info to calculate wall hours, since there does
@@ -498,6 +510,7 @@ summary_table.add_column('idle','idle',8,tally='sum')
 summary_table.add_column('held','held',8,tally='sum')
 summary_table.add_column('user','user',10)
 summary_table.add_column('gen','generator',9)
+summary_table.add_column('eff','efficiency',10)
 
 site_table = CondorTable()
 site_table.add_column('site','MATCH_GLIDEIN_Site',26)
@@ -508,6 +521,7 @@ site_table.add_column('idle','idle',8,tally='sum')
 site_table.add_column('held','held',8,tally='sum')
 site_table.add_column('wallhr','wallhr',6)
 site_table.add_column('stddev','ewallhr',7)
+site_table.add_column('eff','efficiency',4)
 
 job_table = CondorTable()
 job_table.add_column('condor','condorid',13)
@@ -519,6 +533,7 @@ job_table.add_column('exit','ExitCode',4)
 job_table.add_column('sig','ExitBySignal',4)
 job_table.add_column('att','NumJobStarts',4,tally='avg')
 job_table.add_column('wallhr','wallhr',6,tally='avg')
+job_table.add_column('eff','efficiency',4,tally='avg')
 job_table.add_column('start','JobCurrentStartDate',12)
 job_table.add_column('end','CompletionDate',12)
 job_table.add_column('user','user',10)
@@ -538,6 +553,7 @@ if __name__ == '__main__':
   cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username (repeatable)')
   cli.add_argument('-site', default=[], action='append', type=str, help='limit by OSG site name, pattern matched (repeatable)')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
+  cli.add_argument('-hold', default=False, action='store_true', help='send matching jobs to hold state')
   cli.add_argument('-idle', default=False, action='store_true', help='limit to jobs currently in idle state')
   cli.add_argument('-running', default=False, action='store_true', help='limit to jobs currently in running state')
   cli.add_argument('-completed', default=False, action='store_true', help='limit to completed jobs')
@@ -589,6 +605,9 @@ if __name__ == '__main__':
     sys.exit(0)
 
   for cid,job in condor_yield(args):
+
+    if args.hold:
+      condor_hold_job(job)
 
     if args.vacate>0:
       if job.get('wallhr') is not None:
