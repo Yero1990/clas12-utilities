@@ -322,40 +322,33 @@ def condor_plot(args):
       site = job.get('MATCH_GLIDEIN_Site')
       if gen not in h1eff_gen:
         h1eff_gen[gen] = h1eff.Clone('h1eff_gen_%s'%gen)
+        h1eff_gen[gen].Reset()
       if site not in h1eff_site:
         h1eff_site[site] = h1eff.Clone('h1eff_site_%s'%site)
         h1wall_site[site] = h1wall.Clone('h1wall_site_%s'%site)
+        h1eff_site[site].Reset()
+        h1wall_site[site].Reset()
       h1eff.Fill(eff)
       h1wall.Fill(wall)
       h2eff.Fill(wall, eff)
       h1att.Fill(job.get('NumJobStarts'))
       h1eff_gen[gen].Fill(eff)
-      #print(site)
       h1eff_site[site].Fill(eff)
       h1wall_site[site].Fill(wall)
-      #print(site,h1eff_site[site].GetEntries())
-
-  #for s,h in h1eff_site.items():
-  #  print(s,h.GetEntries())
-
   set_histos_max(h1eff_gen.values())
   set_histos_max(h1eff_site.values())
   set_histos_max(h1wall_site.values())
-
-  root_store = [h1eff, h2eff, h1att, h1wall]
+  leg_gen = ROOT.TLegend(0.11,0.95-len(h1eff_gen)*0.05,0.3,0.95)
+  leg_site = ROOT.TLegend(0.05,0.05,0.95,0.95)
+  root_store = [h1eff, h2eff, h1att, h1wall, leg_gen, leg_site]
   root_store.extend(h1eff_gen.values())
   root_store.extend(h1eff_site.values())
   root_store.extend(h1wall_site.values())
-  #can.cd(1)
-  #h1eff.Draw()
   can.cd(6)
   h2eff.Draw('COLZ')
   can.cd(2)
   h1att.Draw()
   can.cd(1)
-  leg_gen = ROOT.TLegend(0.11,0.95-len(h1eff_gen)*0.05,0.3,0.95)
-  opt = ''
-
   max_sites = []
   for site in h1eff_site.keys():
     if site not in max_sites:
@@ -367,16 +360,13 @@ def condor_plot(args):
           break
       if not inserted:
         max_sites.append(site)
-#  for site in max_sites:
-#    print(site,h1eff_site[site].GetEntries())
-
+  opt = ''
   for ii,gen in enumerate(sorted(h1eff_gen.keys())):
     h1eff_gen[gen].SetLineColor(ii+1)
     leg_gen.AddEntry(h1eff_gen[gen], gen, "l")
     h1eff_gen[gen].Draw(opt)
     opt = 'SAME'
   leg_gen.Draw()
-  leg_site = ROOT.TLegend(0.05,0.05,0.95,0.95)
   opt = ''
   for ii,site in enumerate(max_sites):
     if ii > 10:
@@ -392,8 +382,6 @@ def condor_plot(args):
   can.cd(5)
   leg_site.Draw()
   can.Update()
-  root_store.append(leg_gen)
-  root_store.append(leg_site)
   return can
 
 def set_histos_max(histos):
