@@ -271,8 +271,9 @@ def condor_site_summary(args):
       sites[site]['done'] = null_field
   return sort_dict(sites, 'total')
 
-condor_histos = []
+root_store = []
 def condor_plot(args):
+  global root_store
   import ROOT
   ROOT.gStyle.SetCanvasColor(0)
   ROOT.gStyle.SetPadColor(0)
@@ -303,29 +304,69 @@ def condor_plot(args):
   ROOT.gStyle.SetOptStat(0)
   ROOT.gStyle.SetHistMinimumZero(ROOT.kTRUE)
   ROOT.gROOT.ForceStyle()
-  can = ROOT.TCanvas('can','',800,600)
-  can.Divide(2,2)
+  can = ROOT.TCanvas('can','',900,500)
+  can.Divide(3,2)
   can.Draw()
-  gens = []
+  h1gen = {}
+  h1site = {}
   h1eff = ROOT.TH1D('h1eff',';Efficiency',200,0,1.5)
   h2eff = ROOT.TH2D('h2eff',';Wall Hours;Efficiency',100,0,18,100,0,1.5)
   h1att = ROOT.TH1D('h1att',';Attempts',30,0.5,30.5)
   for condor_id,job in condor_yield(args):
     if job.get('efficiency') is not None:
-      if job.get('generator') not in gens:
-        gens.append(job.get('generator'))
-      h1eff.Fill(job.get('efficiency'))
-      h2eff.Fill(float(job.get('wallhr')),job.get('efficiency'))
+      gen = job.get('generator')
+      eff = job.get('efficiency')
+      site = job.get('MATCH_GLIDEIN_Site')
+      if gen not in h1gen:
+        h1gen[gen] = h1eff.Clone('h1gen_%s'%gen)
+      if site not in h1site:
+        h1site[site] = h1eff.Clone('h1site_%s'%site)
+      h1eff.Fill(eff)
+      h2eff.Fill(float(job.get('wallhr')), eff)
       h1att.Fill(job.get('NumJobStarts'))
-  condor_histos = [h1eff,h2eff,h1att]
+      h1gen[gen].Fill(eff)
+      h1site[site].Fill(eff)
+  set_histos_max(h1gen.values())
+  set_histos_max(h1site.values())
+  root_store = [h1eff,h2eff,h1att]
+  root_store.extend(h1gen.values())
+  root_store.extend(h1site.values())
   can.cd(1)
   h1eff.Draw()
-  can.cd(2)
+  can.cd(4)
   h2eff.Draw('COLZ')
-  can.cd(3)
+  can.cd(5)
   h1att.Draw()
+  can.cd(2)
+  leg_gen = ROOT.TLegend(0.11,0.95-len(h1gen)*0.05,0.3,0.95)
+  opt = ''
+  for ii,gen in enumerate(sorted(h1gen.keys())):
+    h1gen[gen].SetLineColor(ii+1)
+    leg_gen.AddEntry(h1gen[gen], gen, "l")
+    h1gen[gen].Draw(opt)
+    opt = 'SAME'
+  leg_gen.Draw()
+  can.cd(3)
+  leg_site = ROOT.TLegend(0.11,0.5,0.3,0.95)
+  opt = ''
+  for ii,site in enumerate(sorted(h1site.keys())):
+    h1site[site].SetLineColor(ii+1)
+    leg_site.AddEntry(h1site[site], site, "l")
+    h1site[site].Draw(opt)
+    opt = 'SAME'
+  leg_site.Draw()
   can.Update()
+  root_store.append(leg_gen)
+  root_store.append(leg_site)
   return can
+
+def set_histos_max(histos):
+  hmax = -999
+  for h in histos:
+    if h.GetMaximum() > hmax:
+      hmax = h.GetMaximum()
+  for h in histos:
+    h.SetMaximum(hmax*1.1)
 
 ###########################################################
 ###########################################################
@@ -566,7 +607,7 @@ summary_table.add_column('idle','idle',8,tally='sum')
 summary_table.add_column('held','held',8,tally='sum')
 summary_table.add_column('user','user',10)
 summary_table.add_column('gen','generator',9)
-summary_table.add_column('eff','efficiency',10)
+summary_table.add_column('eff','efficiency',4)
 
 site_table = CondorTable()
 site_table.add_column('site','MATCH_GLIDEIN_Site',26)
@@ -609,7 +650,7 @@ if __name__ == '__main__':
   cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username (repeatable)')
   cli.add_argument('-site', default=[], action='append', type=str, help='limit by OSG site name, pattern matched (repeatable)')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
-  #cli.add_argument('-hold', default=False, action='store_true', help='send matching jobs to hold state')
+  cli.add_argument('-hold', default=False, action='store_true', help='send matching jobs to hold state')
   cli.add_argument('-idle', default=False, action='store_true', help='limit to jobs currently in idle state')
   cli.add_argument('-running', default=False, action='store_true', help='limit to jobs currently in running state')
   cli.add_argument('-completed', default=False, action='store_true', help='limit to completed jobs')
@@ -665,14 +706,14 @@ if __name__ == '__main__':
     c = condor_plot(args)
     if args.plot is not True:
       c.SaveAs(args.plot)
-    print('Done Plotting.  Press Any Key to close.')
+    print('Done Plotting.  Press Return to close.')
     input()
     sys.exit(0)
 
   for cid,job in condor_yield(args):
 
-    #if args.hold:
-    #  condor_hold_job(job)
+    if args.hold:
+      condor_hold_job(job)
 
     if args.vacate>0:
       if job.get('wallhr') is not None:
