@@ -307,53 +307,89 @@ def condor_plot(args):
   can = ROOT.TCanvas('can','',900,500)
   can.Divide(3,2)
   can.Draw()
-  h1gen = {}
-  h1site = {}
+  h1wall_site = {}
+  h1eff_gen = {}
+  h1eff_site = {}
   h1eff = ROOT.TH1D('h1eff',';Efficiency',200,0,1.5)
-  h2eff = ROOT.TH2D('h2eff',';Wall Hours;Efficiency',100,0,18,100,0,1.5)
+  h2eff = ROOT.TH2D('h2eff',';Wall Hours;Efficiency',100,0,20,100,0,1.5)
   h1att = ROOT.TH1D('h1att',';Attempts',30,0.5,30.5)
+  h1wall = ROOT.TH1D('h1wall',';Wall Hours',100,0,20)
   for condor_id,job in condor_yield(args):
     if job.get('efficiency') is not None:
       gen = job.get('generator')
-      eff = job.get('efficiency')
+      eff = float(job.get('efficiency'))
+      wall = float(job.get('wallhr'))
       site = job.get('MATCH_GLIDEIN_Site')
-      if gen not in h1gen:
-        h1gen[gen] = h1eff.Clone('h1gen_%s'%gen)
-      if site not in h1site:
-        h1site[site] = h1eff.Clone('h1site_%s'%site)
+      if gen not in h1eff_gen:
+        h1eff_gen[gen] = h1eff.Clone('h1eff_gen_%s'%gen)
+      if site not in h1eff_site:
+        h1eff_site[site] = h1eff.Clone('h1eff_site_%s'%site)
+        h1wall_site[site] = h1wall.Clone('h1wall_site_%s'%site)
       h1eff.Fill(eff)
-      h2eff.Fill(float(job.get('wallhr')), eff)
+      h1wall.Fill(wall)
+      h2eff.Fill(wall, eff)
       h1att.Fill(job.get('NumJobStarts'))
-      h1gen[gen].Fill(eff)
-      h1site[site].Fill(eff)
-  set_histos_max(h1gen.values())
-  set_histos_max(h1site.values())
-  root_store = [h1eff,h2eff,h1att]
-  root_store.extend(h1gen.values())
-  root_store.extend(h1site.values())
-  can.cd(1)
-  h1eff.Draw()
-  can.cd(4)
+      h1eff_gen[gen].Fill(eff)
+      #print(site)
+      h1eff_site[site].Fill(eff)
+      h1wall_site[site].Fill(wall)
+      #print(site,h1eff_site[site].GetEntries())
+
+  #for s,h in h1eff_site.items():
+  #  print(s,h.GetEntries())
+
+  set_histos_max(h1eff_gen.values())
+  set_histos_max(h1eff_site.values())
+  set_histos_max(h1wall_site.values())
+
+  root_store = [h1eff, h2eff, h1att, h1wall]
+  root_store.extend(h1eff_gen.values())
+  root_store.extend(h1eff_site.values())
+  root_store.extend(h1wall_site.values())
+  #can.cd(1)
+  #h1eff.Draw()
+  can.cd(6)
   h2eff.Draw('COLZ')
-  can.cd(5)
-  h1att.Draw()
   can.cd(2)
-  leg_gen = ROOT.TLegend(0.11,0.95-len(h1gen)*0.05,0.3,0.95)
+  h1att.Draw()
+  can.cd(1)
+  leg_gen = ROOT.TLegend(0.11,0.95-len(h1eff_gen)*0.05,0.3,0.95)
   opt = ''
-  for ii,gen in enumerate(sorted(h1gen.keys())):
-    h1gen[gen].SetLineColor(ii+1)
-    leg_gen.AddEntry(h1gen[gen], gen, "l")
-    h1gen[gen].Draw(opt)
+
+  max_sites = []
+  for site in h1eff_site.keys():
+    if site not in max_sites:
+      inserted = False
+      for ii,ss in enumerate(max_sites):
+        if h1eff_site[site].GetEntries() > h1eff_site[ss].GetEntries():
+          inserted = True
+          max_sites.insert(ii, site)
+          break
+      if not inserted:
+        max_sites.append(site)
+#  for site in max_sites:
+#    print(site,h1eff_site[site].GetEntries())
+
+  for ii,gen in enumerate(sorted(h1eff_gen.keys())):
+    h1eff_gen[gen].SetLineColor(ii+1)
+    leg_gen.AddEntry(h1eff_gen[gen], gen, "l")
+    h1eff_gen[gen].Draw(opt)
     opt = 'SAME'
   leg_gen.Draw()
-  can.cd(3)
-  leg_site = ROOT.TLegend(0.11,0.5,0.3,0.95)
+  leg_site = ROOT.TLegend(0.05,0.05,0.95,0.95)
   opt = ''
-  for ii,site in enumerate(sorted(h1site.keys())):
-    h1site[site].SetLineColor(ii+1)
-    leg_site.AddEntry(h1site[site], site, "l")
-    h1site[site].Draw(opt)
+  for ii,site in enumerate(max_sites):
+    if ii > 10:
+      break
+    leg_site.AddEntry(h1eff_site[site], '%s %d'%(site,h1eff_site[site].GetEntries()), "l")
+    h1eff_site[site].SetLineColor(ii+1)
+    h1wall_site[site].SetLineColor(ii+1)
+    can.cd(4)
+    h1eff_site[site].Draw(opt)
+    can.cd(3)
+    h1wall_site[site].Draw(opt)
     opt = 'SAME'
+  can.cd(5)
   leg_site.Draw()
   can.Update()
   root_store.append(leg_gen)
