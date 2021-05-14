@@ -271,6 +271,62 @@ def condor_site_summary(args):
       sites[site]['done'] = null_field
   return sort_dict(sites, 'total')
 
+condor_histos = []
+def condor_plot(args):
+  import ROOT
+  ROOT.gStyle.SetCanvasColor(0)
+  ROOT.gStyle.SetPadColor(0)
+  ROOT.gStyle.SetTitleFillColor(0)
+  ROOT.gStyle.SetTitleBorderSize(0)
+  ROOT.gStyle.SetFrameBorderMode(0)
+  ROOT.gStyle.SetPaintTextFormat(".0f")
+  ROOT.gStyle.SetLegendBorderSize(1)
+  ROOT.gStyle.SetLegendFillColor(ROOT.kWhite)
+  ROOT.gStyle.SetTitleFontSize(0.04)
+  ROOT.gStyle.SetPadTopMargin(0.05)
+  ROOT.gStyle.SetPadLeftMargin(0.11)
+  ROOT.gStyle.SetPadBottomMargin(0.12)
+  ROOT.gStyle.SetTitleXSize(0.05)
+  ROOT.gStyle.SetTitleYSize(0.05)
+  ROOT.gStyle.SetTextFont(42)
+  ROOT.gStyle.SetStatFont(42)
+  ROOT.gStyle.SetLabelFont(42,"x")
+  ROOT.gStyle.SetLabelFont(42,"y")
+  ROOT.gStyle.SetLabelFont(42,"z")
+  ROOT.gStyle.SetTitleFont(42,"x")
+  ROOT.gStyle.SetTitleFont(42,"y")
+  ROOT.gStyle.SetTitleFont(42,"z")
+  ROOT.gStyle.SetHistLineWidth(2)
+  ROOT.gStyle.SetGridColor(15)
+  ROOT.gStyle.SetPadGridX(1)
+  ROOT.gStyle.SetPadGridY(1)
+  ROOT.gStyle.SetOptStat(0)
+  ROOT.gStyle.SetHistMinimumZero(ROOT.kTRUE)
+  ROOT.gROOT.ForceStyle()
+  can = ROOT.TCanvas('can','',800,600)
+  can.Divide(2,2)
+  can.Draw()
+  gens = []
+  h1eff = ROOT.TH1D('h1eff',';Efficiency',200,0,1.5)
+  h2eff = ROOT.TH2D('h2eff',';Wall Hours;Efficiency',100,0,18,100,0,1.5)
+  h1att = ROOT.TH1D('h1att',';Attempts',30,0.5,30.5)
+  for condor_id,job in condor_yield(args):
+    if job.get('efficiency') is not None:
+      if job.get('generator') not in gens:
+        gens.append(job.get('generator'))
+      h1eff.Fill(job.get('efficiency'))
+      h2eff.Fill(float(job.get('wallhr')),job.get('efficiency'))
+      h1att.Fill(job.get('NumJobStarts'))
+  condor_histos = [h1eff,h2eff,h1att]
+  can.cd(1)
+  h1eff.Draw()
+  can.cd(2)
+  h2eff.Draw('COLZ')
+  can.cd(3)
+  h1att.Draw()
+  can.Update()
+  return can
+
 ###########################################################
 ###########################################################
 
@@ -553,7 +609,7 @@ if __name__ == '__main__':
   cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username (repeatable)')
   cli.add_argument('-site', default=[], action='append', type=str, help='limit by OSG site name, pattern matched (repeatable)')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
-  cli.add_argument('-hold', default=False, action='store_true', help='send matching jobs to hold state')
+  #cli.add_argument('-hold', default=False, action='store_true', help='send matching jobs to hold state')
   cli.add_argument('-idle', default=False, action='store_true', help='limit to jobs currently in idle state')
   cli.add_argument('-running', default=False, action='store_true', help='limit to jobs currently in running state')
   cli.add_argument('-completed', default=False, action='store_true', help='limit to completed jobs')
@@ -566,6 +622,7 @@ if __name__ == '__main__':
   cli.add_argument('-json', default=False, action='store_true', help='print full condor data in JSON format')
   cli.add_argument('-input', default=False, metavar='PATH', type=str, help='read condor data from a JSON file instead of querying')
   cli.add_argument('-clas12mon', default=False, action='store_true', help='publish results to clas12mon for timelines')
+  cli.add_argument('-plot', default=False, const=True, nargs='?', help='generate plots (requires ROOT)')
 
   args = cli.parse_args(sys.argv[1:])
 
@@ -604,10 +661,18 @@ if __name__ == '__main__':
     print(json.dumps(condor_data, **json_format))
     sys.exit(0)
 
+  if args.plot is not False:
+    c = condor_plot(args)
+    if args.plot is not True:
+      c.SaveAs(args.plot)
+    print('Done Plotting.  Press Any Key to close.')
+    input()
+    sys.exit(0)
+
   for cid,job in condor_yield(args):
 
-    if args.hold:
-      condor_hold_job(job)
+    #if args.hold:
+    #  condor_hold_job(job)
 
     if args.vacate>0:
       if job.get('wallhr') is not None:
