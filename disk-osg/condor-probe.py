@@ -122,7 +122,7 @@ def condor_munge():
     job['condor'] = None
     job['stderr'] = None
     job['stdout'] = None
-    job['efficiency'] = None
+    job['eff'] = None
     job['generator'] = get_generator(job)
     job['wallhr'] = condor_calc_wallhr(job)
     job['condorid'] = '%d.%d'%(job['ClusterId'],job['ProcId'])
@@ -140,7 +140,8 @@ def condor_munge():
         if condor_id != job['condor']:
           raise ValueError('condor ids do not match.')
     if job.get('RemoteWallClockTime') > 0:
-      job['efficiency'] = float(job.get('RemoteUserCpu'))/job.get('RemoteWallClockTime')
+      if job_states[job['JobStatus']] == 'C':
+        job['eff'] = float(job.get('RemoteUserCpu'))/job.get('RemoteWallClockTime')
 
 def condor_calc_wallhr(job):
   '''Use available info to calculate wall hours, since there does
@@ -235,11 +236,19 @@ def condor_cluster_summary(args):
     if cluster_id not in ret:
       ret[cluster_id] = job.copy()
       ret[cluster_id].update(job_counts.copy())
+      ret[cluster_id]['eff'] = []
     ret[cluster_id][get_status_key(job)] += 1
     ret[cluster_id]['done'] = ret[cluster_id]['TotalSubmitProcs']
     ret[cluster_id]['done'] -= ret[cluster_id]['held']
     ret[cluster_id]['done'] -= ret[cluster_id]['idle']
     ret[cluster_id]['done'] -= ret[cluster_id]['run']
+    try:
+      float(job['eff'])
+      ret[cluster_id]['eff'].append(float(job['eff']))
+    except:
+      pass
+  for v in ret.values():
+    v['eff'] = average(v['eff'])
   return ret
 
 def condor_site_summary(args):
@@ -253,6 +262,7 @@ def condor_site_summary(args):
       sites[site].update(job_counts.copy())
       sites[site]['wallhr'] = []
       sites[site]['attempt'] = []
+      sites[site]['eff'] = []
     sites[site]['attempt'].append(job['NumJobStarts'])
     sites[site]['total'] += 1
     sites[site][get_status_key(job)] += 1
@@ -262,6 +272,11 @@ def condor_site_summary(args):
         sites[site]['wallhr'].append(x)
       except:
         pass
+    try:
+      float(job['eff'])
+      sites[site]['eff'].append(float(job['eff']))
+    except:
+      pass
   for site in sites.keys():
     sites[site]['ewallhr'] = stddev(sites[site]['wallhr'])
     sites[site]['eattempt'] = stddev(sites[site]['attempt'])
@@ -269,6 +284,7 @@ def condor_site_summary(args):
     sites[site]['attempt'] = average(sites[site]['attempt'])
     if args.hours <= 0:
       sites[site]['done'] = null_field
+    sites[site]['eff'] = average(sites[site]['eff'])
   return sort_dict(sites, 'total')
 
 root_store = []
@@ -310,14 +326,16 @@ def condor_plot(args):
   h1wall_site = {}
   h1eff_gen = {}
   h1eff_site = {}
-  h1eff = ROOT.TH1D('h1eff',';Efficiency',200,0,1.5)
+  h1eff = ROOT.TH1D('h1eff',';Efficiency',100,0,1.5)
   h2eff = ROOT.TH2D('h2eff',';Wall Hours;Efficiency',100,0,20,100,0,1.5)
   h1att = ROOT.TH1D('h1att',';Attempts',30,0.5,30.5)
   h1wall = ROOT.TH1D('h1wall',';Wall Hours',100,0,20)
+  text = ROOT.TText()
+  text.SetTextSize(0.03)
   for condor_id,job in condor_yield(args):
-    if job.get('efficiency') is not None:
+    if job.get('eff') is not None:
       gen = job.get('generator')
-      eff = float(job.get('efficiency'))
+      eff = float(job.get('eff'))
       wall = float(job.get('wallhr'))
       site = job.get('MATCH_GLIDEIN_Site')
       if gen not in h1eff_gen:
@@ -344,6 +362,8 @@ def condor_plot(args):
   root_store.extend(h1eff_gen.values())
   root_store.extend(h1eff_site.values())
   root_store.extend(h1wall_site.values())
+  avg_eff = h1eff.GetMean()
+  avg_att = h1att.GetMean()
   can.cd(6)
   h2eff.Draw('COLZ')
   can.cd(2)
@@ -631,7 +651,7 @@ summary_table.add_column('idle','idle',8,tally='sum')
 summary_table.add_column('held','held',8,tally='sum')
 summary_table.add_column('user','user',10)
 summary_table.add_column('gen','generator',9)
-summary_table.add_column('eff','efficiency',4)
+summary_table.add_column('eff','eff',4)
 
 site_table = CondorTable()
 site_table.add_column('site','MATCH_GLIDEIN_Site',26)
@@ -642,7 +662,7 @@ site_table.add_column('idle','idle',8,tally='sum')
 site_table.add_column('held','held',8,tally='sum')
 site_table.add_column('wallhr','wallhr',6)
 site_table.add_column('stddev','ewallhr',7)
-site_table.add_column('eff','efficiency',4)
+site_table.add_column('eff','eff',4)
 
 job_table = CondorTable()
 job_table.add_column('condor','condorid',13)
@@ -654,7 +674,7 @@ job_table.add_column('exit','ExitCode',4)
 job_table.add_column('sig','ExitBySignal',4)
 job_table.add_column('att','NumJobStarts',4,tally='avg')
 job_table.add_column('wallhr','wallhr',6,tally='avg')
-job_table.add_column('eff','efficiency',4,tally='avg')
+job_table.add_column('eff','eff',4,tally='avg')
 job_table.add_column('start','JobCurrentStartDate',12)
 job_table.add_column('end','CompletionDate',12)
 job_table.add_column('user','user',10)
