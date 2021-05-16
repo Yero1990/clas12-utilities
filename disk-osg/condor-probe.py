@@ -14,6 +14,7 @@ import glob
 import json
 import time
 import math
+import gzip
 import socket
 import getpass
 import argparse
@@ -21,37 +22,40 @@ import datetime
 import subprocess
 import collections
 
+null_field = '-'
 json_format =  {'indent':2, 'separators':(',',': '), 'sort_keys':True}
 log_regex = '/([a-z]+)/job_([0-9]+)/log/job\.([0-9]+)\.([0-9]+)\.'
 job_states = {0:'U', 1:'I', 2:'R', 3:'X', 4:'C', 5:'H', 6:'E'}
 job_counts = {'done':0, 'run':0, 'idle':0, 'held':0, 'other':0, 'total':0}
-null_field = '-'
-cvmfs_error_strings = [
-  'Loaded environment state is inconsistent',
-  'Command not found',
-  'Unable to access the Singularity image',
-  'CVMFS ERROR'
-#  'No such file or directory'
-#  'Transport endpoint is not connected',
-]
+exit_codes = { 202:'cvmfs', 203:'generator', 211:'ls', 204:'gemc',
+               205:'evio2hipo', 207:'recon-util', 208:'hipo-utils', 210:'xrootd' }
+cvmfs_error_strings = [ 'Loaded environment state is inconsistent',
+  'Command not found','Unable to access the Singularity image','CVMFS ERROR']
+#  'No such file or directory', 'Transport endpoint is not connected',
 
 ###########################################################
 ###########################################################
 
 condor_data = collections.OrderedDict()
 
-def condor_query(constraints=[], opts=[], hours=0, completed=False):
+def condor_query(args):
   '''Load data from condor_q and condor_history'''
-  if not completed:
+  constraints = args.condor
+  opts = []
+  if args.held:
+    opts.append('-hold')
+  if args.running:
+    opts.append('-run')
+  if not args.completed:
     condor_q(constraints=constraints, opts=opts)
-  if hours > 0:
-    condor_history(constraints=constraints, hours=hours)
-  condor_munge()
+  if args.hours > 0:
+    condor_history(constraints=constraints, hours=args.hours)
+  condor_munge(args)
 
-def condor_read(path):
+def condor_read(args):
   global condor_data
-  condor_data = json.load(open(path,'r'))
-  condor_munge()
+  condor_data = json.load(open(args.input,'r'))
+  condor_munge(args)
 
 def condor_write(path):
   with open(path,'w') as f:
@@ -109,11 +113,11 @@ def condor_history(constraints=[], hours=1):
   start = str(int(start.timestamp()))
   cmd = ['condor_history','gemc']
   cmd.extend(constraints)
-  cmd.extend(opts)
+  #cmd.extend(opts)
   cmd.extend(['-json','-since',"CompletionDate!=0&&CompletionDate<%s"%start])
   condor_add_json(cmd)
 
-def condor_munge():
+def condor_munge(args):
   '''Assign custom parameters based on parsing some condor parameters'''
   for condor_id,job in condor_data.items():
     job['user'] = None
@@ -129,6 +133,8 @@ def condor_munge():
     job['gemcjob'] = '.'.join(job.get('Args').split()[0:2])
     if job.get('RemoteHost') is not None:
       job['host'] = job.get('RemoteHost').split('@').pop()
+    if job.get('LastRemoteHost') is not None:
+      job['LastRemoteHost'] = job.get('LastRemoteHost').split('@').pop().split('.').pop(0)
     if 'UserLog' in job:
       m = re.search(log_regex, job['UserLog'])
       if m is not None:
@@ -142,6 +148,9 @@ def condor_munge():
     if job.get('RemoteWallClockTime') > 0:
       if job_states[job['JobStatus']] == 'C':
         job['eff'] = float(job.get('RemoteUserCpu'))/job.get('RemoteWallClockTime')
+    if args.parseexit:
+      if job_states[job['JobStatus']] == 'H':
+        job['ExitCode'] = get_exit_code(job)
 
 def condor_calc_wallhr(job):
   '''Use available info to calculate wall hours, since there does
@@ -172,6 +181,25 @@ def condor_yield(args):
     if condor_match(job, args):
       yield (condor_id, job)
 
+exit_codes_match = None
+exit_codes_antimatch = None
+def condor_match_exit_code(job, args):
+  global exit_codes_match
+  global exit_codes_antimatch
+  if exit_codes_match is None:
+    exit_codes_match = []
+    exit_codes_antimatch = []
+    for x in args.exit:
+      if x < 0:
+        exit_codes_antimatch.append(abs(x))
+      else:
+        exit_codes_match.append(x)
+  if job.get('ExitCode') in exit_codes_antimatch:
+    return False
+  if len(exit_codes_match)>0 and job.get('ExitCode') not in exit_codes_match:
+    return False
+  return True
+
 def condor_match(job, args):
   ''' Apply job constraints, on top of those condor knows about'''
   if len(args.condor)>0 and job['condor'] not in args.condor:
@@ -192,6 +220,9 @@ def condor_match(job, args):
         break
     if not matched:
       return False
+  if len(args.generator) > 0:
+    if job.get('generator') not in args.generator:
+      return False
   if args.idle and job_states.get(job['JobStatus']) != 'I':
     return False
   if args.completed and job_states.get(job['JobStatus']) != 'C':
@@ -199,6 +230,8 @@ def condor_match(job, args):
   if args.running and job_states.get(job['JobStatus']) != 'R':
     return False
   if args.held and job_states.get(job['JobStatus']) != 'H':
+    return False
+  if not condor_match_exit_code(job, args):
     return False
   return True
 
@@ -287,9 +320,25 @@ def condor_site_summary(args):
     sites[site]['eff'] = average(sites[site]['eff'])
   return sort_dict(sites, 'total')
 
+def condor_exit_code_summary(args):
+  x = {}
+  for cid,job in condor_yield(args):
+    if job.get('ExitCode') is not None:
+      if job.get('ExitCode') not in x:
+        x[job.get('ExitCode')] = 0
+      x[job.get('ExitCode')] += 1
+  tot = sum(x.values())
+  ret = '\nExit Code Summary:\n'
+  ret += '\n'.join(['%3d  %6.2f%%  %s'%(k,v/tot*100,exit_codes[k]) for k,v in x.items()])
+  return ret + '\n'
+
 root_store = []
 def condor_plot(args):
   global root_store
+  # pyROOT apparently looks at sys.argv and barfs if it finds an argument
+  # it doesn't like, maybe ones starting with "h" (help).  Hopefully there
+  # is a better way, but here we override sys.argv to avoid that:
+  sys.argv = []
   import ROOT
   ROOT.gStyle.SetCanvasColor(0)
   ROOT.gStyle.SetPadColor(0)
@@ -364,7 +413,7 @@ def condor_plot(args):
   root_store.extend(h1wall_site.values())
   avg_eff = h1eff.GetMean()
   avg_att = h1att.GetMean()
-  can.cd(6)
+  can.cd(3)
   h2eff.Draw('COLZ')
   can.cd(2)
   h1att.Draw()
@@ -396,7 +445,7 @@ def condor_plot(args):
     h1wall_site[site].SetLineColor(ii+1)
     can.cd(4)
     h1eff_site[site].Draw(opt)
-    can.cd(3)
+    can.cd(6)
     h1wall_site[site].Draw(opt)
     opt = 'SAME'
   can.cd(5)
@@ -439,42 +488,61 @@ def sort_dict(dictionary, subkey):
 def readlines(filename):
   if filename is not None:
     if os.path.isfile(filename):
-      with open(filename, errors='replace') as f:
-        for line in f.readlines():
-          yield line.strip()
+      if filename.endswith('.gz'):
+        f = gzip.open(filename, errors='replace')
+      else:
+        f = open(filename, errors='replace')
+      for line in f.readlines():
+        yield line.strip()
+      f.close()
 
 def readlines_reverse(filename, max_lines):
   '''Get the trailing lines from a file, stopping
   after max_lines unless max_lines is negative'''
-  n_lines = 0
-  with open(filename, errors='replace') as qfile:
-    qfile.seek(0, os.SEEK_END)
-    position = qfile.tell()
-    line = ''
-    while position >= 0:
-      if n_lines > max_lines and max_lines>0:
-        break
-      qfile.seek(position)
-      next_char = qfile.read(1)
-      if next_char == "\n":
-         n_lines += 1
-         yield line[::-1]
-         line = ''
+  if filename is not None:
+    if os.path.isfile(filename):
+      if filename.endswith('.gz'):
+        f = gzip.open(filename, errors='replace')
       else:
-         line += next_char
-      position -= 1
-  yield line[::-1]
+        f = open(filename, errors='replace')
+      n_lines = 0
+      f.seek(0, os.SEEK_END)
+      position = f.tell()
+      line = ''
+      while position >= 0:
+        if n_lines > max_lines and max_lines>0:
+          break
+        f.seek(position)
+        next_char = f.read(1)
+        if next_char == "\n":
+           n_lines += 1
+           yield line[::-1]
+           line = ''
+        else:
+           line += next_char
+        position -= 1
+      yield line[::-1]
 
 ###########################################################
 ###########################################################
 
 def check_cvmfs(job):
-  ''' Return wether a CVMFS error is detected'''
-  for line in readlines(job.get('stderr')):
+  '''Return wether a CVMFS error is detected'''
+  for line in readlines_reverse(job.get('stdout'),20):
     for x in cvmfs_error_strings:
       if line.find(x) >= 0:
         return False
   return True
+
+def get_exit_code(job):
+  '''Extract the exit code from the log file'''
+  try:
+    for line in readlines_reverse(job.get('stderr'),1):
+      cols = line.strip().split()
+      if len(cols) == 2 and cols[0] == 'exit':
+        return int(cols[1])
+  except:
+    return None
 
 # cache generator names to only parse log once per cluster
 generators = {}
@@ -493,6 +561,9 @@ def get_generator(job):
           break
         if line.find('echo LUND Event File:') == 0:
           generators['ClusterId'] = 'lund'
+          break
+        if line.find('gemc') == 0 and line.find('INPUT') < 0:
+          generators['ClusterId'] = 'gemc'
           break
   return generators.get('ClusterId')
 
@@ -542,7 +613,7 @@ class Column():
     self.fmt = '%%-%d.%ds' % (self.width, self.width)
 
 class Table():
-  max_width = 114
+  max_width = 119
   def __init__(self):
     self.columns = []
     self.rows = []
@@ -668,7 +739,7 @@ job_table = CondorTable()
 job_table.add_column('condor','condorid',13)
 job_table.add_column('gemc','gemc',6)
 job_table.add_column('site','MATCH_GLIDEIN_Site',10)
-#job_table.add_column('host','host',20)
+job_table.add_column('host','LastRemoteHost',14)
 job_table.add_column('stat','JobStatus',4)
 job_table.add_column('exit','ExitCode',4)
 job_table.add_column('sig','ExitBySignal',4)
@@ -693,6 +764,8 @@ if __name__ == '__main__':
   cli.add_argument('-gemc', default=[], metavar='# or #.#', action='append', type=str, help='limit by gemc submission id (repeatable)')
   cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username (repeatable)')
   cli.add_argument('-site', default=[], action='append', type=str, help='limit by OSG site name, pattern matched (repeatable)')
+  cli.add_argument('-exit', default=[], metavar='#', action='append', type=int, help='limit by exit code, negative is anti-matching (repeatable)')
+  cli.add_argument('-generator', default=[], action='append', type=str, help='limit by generator name (repeatable)')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
   cli.add_argument('-hold', default=False, action='store_true', help='send matching jobs to hold state')
   cli.add_argument('-idle', default=False, action='store_true', help='limit to jobs currently in idle state')
@@ -707,9 +780,16 @@ if __name__ == '__main__':
   cli.add_argument('-json', default=False, action='store_true', help='print full condor data in JSON format')
   cli.add_argument('-input', default=False, metavar='PATH', type=str, help='read condor data from a JSON file instead of querying')
   cli.add_argument('-clas12mon', default=False, action='store_true', help='publish results to clas12mon for timelines')
-  cli.add_argument('-plot', default=False, const=True, nargs='?', help='generate plots (requires ROOT)')
+  cli.add_argument('-parseexit', default=False, action='store_true', help='parse log files for exit codes')
+  cli.add_argument('-printexit', default=False, action='store_true', help='just print the exit code definitions')
+  cli.add_argument('-plot', default=False, metavar='filename', const=True, nargs='?', help='generate plots (requires ROOT)')
 
   args = cli.parse_args(sys.argv[1:])
+
+  if args.printexit:
+    for k,v in sorted(exit_codes.items()):
+      print('%5d %s'%(k,v))
+    sys.exit(0)
 
   if args.held + args.idle + args.running + args.completed > 1:
     cli.error('Only one of -held/idle/running/completed is allowed.')
@@ -723,20 +803,10 @@ if __name__ == '__main__':
   if socket.gethostname() != 'scosg16.jlab.org' and not args.input:
     cli.error('You must be on scosg16 unless using the -input option.')
 
-  opts, constraints = [], []
-
-  if args.held:
-    opts.append('-hold')
-
-  if args.running:
-    opts.append('-run')
-
-  constraints.extend(args.condor)
-
   if args.input:
-    condor_read(args.input)
+    condor_read(args)
   else:
-    condor_query(constraints=constraints, opts=opts, hours=args.hours, completed=args.completed)
+    condor_query(args)
 
   if args.clas12mon:
     clas12mon(args)
@@ -785,6 +855,8 @@ if __name__ == '__main__':
           print(site_table.add_jobs(condor_site_summary(args)))
       else:
         print(job_table)
+      if args.held or args.completed:
+        print(condor_exit_code_summary(args))
 
   sys.exit(0)
 
