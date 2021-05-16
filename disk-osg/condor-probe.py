@@ -27,8 +27,8 @@ json_format =  {'indent':2, 'separators':(',',': '), 'sort_keys':True}
 log_regex = '/([a-z]+)/job_([0-9]+)/log/job\.([0-9]+)\.([0-9]+)\.'
 job_states = {0:'U', 1:'I', 2:'R', 3:'X', 4:'C', 5:'H', 6:'E'}
 job_counts = {'done':0, 'run':0, 'idle':0, 'held':0, 'other':0, 'total':0}
-exit_codes = { 202:'cvmfs', 203:'generator', 211:'ls', 204:'gemc',
-               205:'evio2hipo', 207:'recon-util', 208:'hipo-utils', 210:'xrootd' }
+exit_codes = { 202:'cvmfs', 203:'generator', 211:'ls', 204:'gemc', 0:'success/unknown',
+               205:'evio2hipo', 207:'recon-util', 208:'hipo-utils', 210:'xrootd'}
 cvmfs_error_strings = [ 'Loaded environment state is inconsistent',
   'Command not found','Unable to access the Singularity image','CVMFS ERROR']
 #  'No such file or directory', 'Transport endpoint is not connected',
@@ -40,7 +40,10 @@ condor_data = collections.OrderedDict()
 
 def condor_query(args):
   '''Load data from condor_q and condor_history'''
-  constraints = args.condor
+  constraints = []
+  for x in args.condor:
+    if not str(x).startswith('-'):
+      constraints.append(str(x))
   opts = []
   if args.held:
     opts.append('-hold')
@@ -181,48 +184,72 @@ def condor_yield(args):
     if condor_match(job, args):
       yield (condor_id, job)
 
-exit_codes_match = None
-exit_codes_antimatch = None
-def condor_match_exit_code(job, args):
-  global exit_codes_match
-  global exit_codes_antimatch
-  if exit_codes_match is None:
-    exit_codes_match = []
-    exit_codes_antimatch = []
-    for x in args.exit:
-      if x < 0:
-        exit_codes_antimatch.append(abs(x))
+class Matcher():
+  def __init__(self, values):
+    self.values = []
+    self.antivalues = []
+    for v in [str(v) for v in values]:
+      if v.startswith('-'):
+        self.antivalues.append(v[1:])
       else:
-        exit_codes_match.append(x)
-  if job.get('ExitCode') in exit_codes_antimatch:
-    return False
-  if len(exit_codes_match)>0 and job.get('ExitCode') not in exit_codes_match:
-    return False
-  return True
+        self.values.append(v)
+  def matches(self, value):
+    if len(self.values) > 0 and str(value) not in self.values:
+      return False
+    if len(self.antivalues) > 0 and str(value) in self.antivalues:
+      return False
+    return True
+  def pattern_matches(self, value):
+    for v in self.values:
+      found = False
+      if v.find(str(value)) >= 0:
+        found = True
+        break
+      if not found:
+        return False
+    for v in self.antivalues:
+      if v.find(str(value)) >= 0:
+        return False
+    return True
 
+condor_matcher = None
+site_matcher = None
+gemc_matcher = None
+user_matcher = None
+exit_matcher = None
+gen_matcher = None
+host_matcher = None
 def condor_match(job, args):
   ''' Apply job constraints, on top of those condor knows about'''
-  if len(args.condor)>0 and job['condor'] not in args.condor:
-    if job['condor'].split('.').pop(0) not in args.condor:
-      return False
-  if len(args.gemc)>0 and job['gemc'] not in args.gemc:
-    if job['gemcjob'] not in args.gemc:
-      return False
-  if len(args.user)>0 and job['user'] not in args.user:
+  global condor_matcher
+  if condor_matcher is None:
+    global site_matcher
+    global gemc_matcher
+    global user_matcher
+    global exit_matcher
+    global gen_matcher
+    global host_matcher
+    condor_matcher = Matcher(args.condor)
+    site_matcher = Matcher(args.site)
+    gemc_matcher = Matcher(args.gemc)
+    user_matcher = Matcher(args.user)
+    exit_matcher = Matcher(args.exit)
+    gen_matcher = Matcher(args.generator)
+    host_matcher = Matcher(args.host)
+  if not condor_matcher.matches(job.get('condor').split('.').pop(0)):
     return False
-  if len(args.site) > 0:
-    if job.get('MATCH_GLIDEIN_Site') is None:
-      return False
-    matched = False
-    for site in args.site:
-      if job['MATCH_GLIDEIN_Site'].find(site) >= 0:
-        matched = True
-        break
-    if not matched:
-      return False
-  if len(args.generator) > 0:
-    if job.get('generator') not in args.generator:
-      return False
+  if not gemc_matcher.matches(job.get('gemc')):
+    return False
+  if not user_matcher.matches(job.get('user')):
+    return False
+  if not site_matcher.pattern_matches(job.get('MATCH_GLIDEIN_Site')):
+    return False
+  if not host_matcher.pattern_matches(job.get('LastRemoteHost')):
+    return False
+  if not gen_matcher.matches(job.get('generator')):
+    return False
+  if not exit_matcher.matches(job.get('ExitCode')):
+    return False
   if args.idle and job_states.get(job['JobStatus']) != 'I':
     return False
   if args.completed and job_states.get(job['JobStatus']) != 'C':
@@ -230,8 +257,6 @@ def condor_match(job, args):
   if args.running and job_states.get(job['JobStatus']) != 'R':
     return False
   if args.held and job_states.get(job['JobStatus']) != 'H':
-    return False
-  if not condor_match_exit_code(job, args):
     return False
   return True
 
@@ -688,8 +713,6 @@ class CondorTable(Table):
     ret = value
     if value is None or value == 'undefined':
       ret = null_field
-    elif name == 'Args':
-      ret = ' '.join(value.split()[2:])
     elif name == 'ExitBySignal':
       ret = {True:'Y',False:'N'}[value]
     elif name == 'JobStatus':
@@ -750,7 +773,6 @@ job_table.add_column('start','JobCurrentStartDate',12)
 job_table.add_column('end','CompletionDate',12)
 job_table.add_column('user','user',10)
 job_table.add_column('gen','generator',9)
-#job_table.add_column('args','Args',30)
 
 ###########################################################
 ###########################################################
@@ -758,16 +780,18 @@ job_table.add_column('gen','generator',9)
 if __name__ == '__main__':
 
   cli = argparse.ArgumentParser(description='Wrap condor_q and condor_history and add features for CLAS12.',
-      epilog='''Per-site wall-hour tallies ignore running jobs, unless -running is specified.
-                Repeatable "limit" options are first OR\'d independently, then all "limit" options are AND'd together.''')
-  cli.add_argument('-condor', default=[], metavar='# or #.#', action='append', type=str, help='limit by condor id (repeatable)')
-  cli.add_argument('-gemc', default=[], metavar='# or #.#', action='append', type=str, help='limit by gemc submission id (repeatable)')
+      epilog='''Repeatable "limit" options are first OR\'d independently, then AND'd together, and if their
+      argument is prefixed with a dash ("-"), it is a veto (overriding the \'OR\').  For non-numeric arguments
+      starting with a dash, use the "-opt=arg" format.  Per-site wall-hour tallies ignore running jobs, unless
+      -running is specified.  Efficiencies are only calculated for completed jobs.''')
+  cli.add_argument('-condor', default=[], metavar='#', action='append', type=int, help='limit by condor cluster id (repeatable)')
+  cli.add_argument('-gemc', default=[], metavar='#', action='append', type=int, help='limit by gemc submission id (repeatable)')
   cli.add_argument('-user', default=[], action='append', type=str, help='limit by portal submitter\'s username (repeatable)')
-  cli.add_argument('-site', default=[], action='append', type=str, help='limit by OSG site name, pattern matched (repeatable)')
-  cli.add_argument('-exit', default=[], metavar='#', action='append', type=int, help='limit by exit code, negative is anti-matching (repeatable)')
+  cli.add_argument('-site', default=[], action='append', type=str, help='limit by site name, pattern matched (repeatable)')
+  cli.add_argument('-host', default=[], action='append', type=str, help='limit by host name, pattern matched (repeatable)')
+  cli.add_argument('-exit', default=[], metavar='#', action='append', type=int, help='limit by exit code (repeatable)')
   cli.add_argument('-generator', default=[], action='append', type=str, help='limit by generator name (repeatable)')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
-  cli.add_argument('-hold', default=False, action='store_true', help='send matching jobs to hold state')
   cli.add_argument('-idle', default=False, action='store_true', help='limit to jobs currently in idle state')
   cli.add_argument('-running', default=False, action='store_true', help='limit to jobs currently in running state')
   cli.add_argument('-completed', default=False, action='store_true', help='limit to completed jobs')
@@ -777,12 +801,13 @@ if __name__ == '__main__':
   cli.add_argument('-tail', default=None, metavar='#', type=int, help='print last # lines of logs (negative=all, 0=filenames)')
   cli.add_argument('-cvmfs', default=False, action='store_true', help='print hostnames from logs with CVMFS errors')
   cli.add_argument('-vacate', default=-1, metavar='#', type=float, help='vacate jobs with wall hours greater than #')
+  cli.add_argument('-hold', default=False, action='store_true', help='send matching jobs to hold state (be careful!!!)')
   cli.add_argument('-json', default=False, action='store_true', help='print full condor data in JSON format')
-  cli.add_argument('-input', default=False, metavar='PATH', type=str, help='read condor data from a JSON file instead of querying')
+  cli.add_argument('-input', default=False, metavar='FILEPATH', type=str, help='read condor data from a JSON file instead of querying')
   cli.add_argument('-clas12mon', default=False, action='store_true', help='publish results to clas12mon for timelines')
   cli.add_argument('-parseexit', default=False, action='store_true', help='parse log files for exit codes')
   cli.add_argument('-printexit', default=False, action='store_true', help='just print the exit code definitions')
-  cli.add_argument('-plot', default=False, metavar='filename', const=True, nargs='?', help='generate plots (requires ROOT)')
+  cli.add_argument('-plot', default=False, metavar='FILEPATH', const=True, nargs='?', help='generate plots (requires ROOT)')
 
   args = cli.parse_args(sys.argv[1:])
 
