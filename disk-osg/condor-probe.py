@@ -36,6 +36,7 @@ cvmfs_error_strings = [ 'Loaded environment state is inconsistent',
 ###########################################################
 ###########################################################
 
+condor_data_tallies = {'goodwall':0, 'badwall':0, 'goodcpu':0, 'badcpu':0, 'goodattempts':0, 'badattempts':0}
 condor_data = collections.OrderedDict()
 
 def condor_query(args):
@@ -52,7 +53,7 @@ def condor_query(args):
   if not args.completed:
     condor_q(constraints=constraints, opts=opts)
   if args.hours > 0:
-    condor_history(constraints=constraints, hours=args.hours)
+    condor_history(args, constraints=constraints)
   condor_munge(args)
 
 def condor_read(args):
@@ -109,14 +110,12 @@ def condor_q(constraints=[], opts=[]):
   cmd.extend(['-nobatch','-json'])
   condor_add_json(cmd)
 
-def condor_history(constraints=[], hours=1):
+def condor_history(args, constraints=[]):
   '''Get the JSON from condor_history'''
-  now = datetime.datetime.now()
-  start = now + datetime.timedelta(hours = -hours)
+  start = args.end + datetime.timedelta(hours = -args.hours)
   start = str(int(start.timestamp()))
   cmd = ['condor_history','gemc']
   cmd.extend(constraints)
-  #cmd.extend(opts)
   cmd.extend(['-json','-since',"CompletionDate!=0&&CompletionDate<%s"%start])
   condor_add_json(cmd)
 
@@ -130,14 +129,12 @@ def condor_munge(args):
     job['stderr'] = None
     job['stdout'] = None
     job['eff'] = None
+    job['ceff'] = None
     job['generator'] = get_generator(job)
     job['wallhr'] = condor_calc_wallhr(job)
     job['condorid'] = '%d.%d'%(job['ClusterId'],job['ProcId'])
     job['gemcjob'] = '.'.join(job.get('Args').split()[0:2])
-    if job.get('RemoteHost') is not None:
-      job['host'] = job.get('RemoteHost').split('@').pop()
-    if job.get('LastRemoteHost') is not None:
-      job['LastRemoteHost'] = job.get('LastRemoteHost').split('@').pop().split('.').pop(0)
+    # setup clas12 job ids and usernames:
     if 'UserLog' in job:
       m = re.search(log_regex, job['UserLog'])
       if m is not None:
@@ -148,32 +145,61 @@ def condor_munge(args):
         job['stdout'] = job['UserLog'][0:-4]+'.out'
         if condor_id != job['condor']:
           raise ValueError('condor ids do not match.')
-    if job.get('RemoteWallClockTime') > 0:
-      if job_states[job['JobStatus']] == 'C':
-        job['eff'] = float(job.get('RemoteUserCpu'))/job.get('RemoteWallClockTime')
-    if args.parseexit:
-      if job_states[job['JobStatus']] == 'H':
-        job['ExitCode'] = get_exit_code(job)
+    # trim hostnames to the important bit:
+    if job.get('RemoteHost') is not None:
+      job['host'] = job.get('RemoteHost').split('@').pop()
+    if job.get('LastRemoteHost') is not None:
+      job['LastRemoteHost'] = job.get('LastRemoteHost').split('@').pop().split('.').pop(0)
+    # calculate cpu utilization for good, completed jobs:
+    if job_states[job['JobStatus']] == 'C' and  float(job.get('wallhr')) > 0:
+        job['eff'] = '%.2f'%(float(job.get('RemoteUserCpu')) / float(job.get('wallhr'))/60/60)
+    # calculate cumulative cpu efficiency for all jobs:
+    if job.get('CumulativeSlotTime') > 0:
+      if job_states[job['JobStatus']] == 'C' or job_states[job['JobStatus']] == 'R':
+        job['ceff'] = '%.2f'%(float(job.get('RemoteUserCpu'))/job.get('CumulativeSlotTime'))
+      else:
+        job['ceff'] = 0
+    # get exit code from log files (since it's not always available from condor):
+    if args.parseexit and job_states[job['JobStatus']] == 'H':
+      job['ExitCode'] = get_exit_code(job)
+    condor_tally(job)
+
+def condor_tally(job):
+  '''Increment total good/bad job counts and times'''
+  global condor_data_tallies
+  x = condor_data_tallies
+  if job_states[job['JobStatus']] == 'C' or job_states[job['JobStatus']] == 'R':
+    if job_states[job['JobStatus']] == 'C':
+      x['goodattempts'] += 1
+      x['goodwall'] += float(job['wallhr'])*60*60
+      x['goodcpu'] += job['RemoteUserCpu']
+    if job['NumJobStarts'] > 1:
+      x['badattempts'] += job['NumJobStarts'] - 1
+      x['badwall'] += job['CumulativeSlotTime'] - float(job['wallhr'])*60*60
+      x['badcpu'] += job['CumulativeRemoteUserCpu'] - job['RemoteUserCpu']
+  elif job['NumJobStarts'] > 0 and job_states[job['JobStatus']] != 'X':
+      x['badattempts'] += job['NumJobStarts']
+      x['badwall'] += job['CumulativeSlotTime']
+      x['badcpu'] += job['CumulativeRemoteUserCpu']
+  x['totalwall'] = x['badwall'] + x['goodwall']
+  x['totalcpu'] = x['badcpu'] + x['goodcpu']
 
 def condor_calc_wallhr(job):
-  '''Use available info to calculate wall hours, since there does
-  not seem to be a more reliable way'''
+  '''Calculate the wall hours of the final, completed instance of a job,
+  because it does not seem to be directly available from condor.  This may
+  may be an overestimate of the job itself, depending on how start date
+  and end date are triggered, but that's ok.'''
   ret = None
-  if job_states[job['JobStatus']] == 'X':
-    return ret
-  if job_states[job['JobStatus']] == 'H':
-    return ret
-  if job_states[job['JobStatus']] == 'E':
-    return ret
-  start = job.get('JobCurrentStartDate')
-  end = job.get('CompletionDate')
-  if start is not None and start > 0:
-    start = datetime.datetime.fromtimestamp(int(start))
-    if end is not None and end > 0:
-      end = datetime.datetime.fromtimestamp(int(end))
-    else:
-      end = datetime.datetime.now()
-    ret = '%.1f' % ((end - start).total_seconds()/60/60)
+  if job_states[job['JobStatus']] == 'C' or job_states[job['JobStatus']] == 'R':
+    start = job.get('JobCurrentStartDate')
+    end = job.get('CompletionDate')
+    if start is not None and start > 0:
+      start = datetime.datetime.fromtimestamp(int(start))
+      if end is not None and end > 0:
+        end = datetime.datetime.fromtimestamp(int(end))
+      else:
+        end = datetime.datetime.now()
+      ret = '%.2f' % ((end - start).total_seconds()/60/60)
   return ret
 
 ###########################################################
@@ -258,6 +284,11 @@ def condor_match(job, args):
     return False
   if args.held and job_states.get(job['JobStatus']) != 'H':
     return False
+  try:
+    if int(job['CompletionDate']) > int(args.end.timestamp()):
+      return False
+  except:
+    pass
   return True
 
 def get_status_key(job):
@@ -274,7 +305,7 @@ def get_status_key(job):
 
 def average(alist):
   if len(alist) > 0:
-    return '%.1f' % (sum(alist) / len(alist))
+    return '%.2f' % (sum(alist) / len(alist))
   else:
     return null_field
 
@@ -282,7 +313,7 @@ def stddev(alist):
   if len(alist) > 0:
     m = average(alist)
     s = sum([ (x-float(m))*(x-float(m)) for x in alist ])
-    return '%.1f' % math.sqrt(s / len(alist))
+    return '%.2f' % math.sqrt(s / len(alist))
   else:
     return null_field
 
@@ -295,18 +326,26 @@ def condor_cluster_summary(args):
       ret[cluster_id] = job.copy()
       ret[cluster_id].update(job_counts.copy())
       ret[cluster_id]['eff'] = []
+      ret[cluster_id]['ceff'] = []
+      ret[cluster_id]['att'] = []
     ret[cluster_id][get_status_key(job)] += 1
     ret[cluster_id]['done'] = ret[cluster_id]['TotalSubmitProcs']
     ret[cluster_id]['done'] -= ret[cluster_id]['held']
     ret[cluster_id]['done'] -= ret[cluster_id]['idle']
     ret[cluster_id]['done'] -= ret[cluster_id]['run']
     try:
-      float(job['eff'])
-      ret[cluster_id]['eff'].append(float(job['eff']))
+      x = float(job['eff'])
+      ret[cluster_id]['eff'].append(x)
+      x = float(job['ceff'])
+      ret[cluster_id]['ceff'].append(x)
+      if job['NumJobStarts'] > 0:
+        ret[cluster_id]['att'].append(job['NumJobStarts'])
     except:
       pass
   for v in ret.values():
     v['eff'] = average(v['eff'])
+    v['ceff'] = average(v['ceff'])
+    v['att'] = average(v['att'])
   return ret
 
 def condor_site_summary(args):
@@ -319,9 +358,6 @@ def condor_site_summary(args):
       sites[site] = job.copy()
       sites[site].update(job_counts.copy())
       sites[site]['wallhr'] = []
-      sites[site]['attempt'] = []
-      sites[site]['eff'] = []
-    sites[site]['attempt'].append(job['NumJobStarts'])
     sites[site]['total'] += 1
     sites[site][get_status_key(job)] += 1
     if args.running or job_states[job['JobStatus']] == 'C':
@@ -330,19 +366,11 @@ def condor_site_summary(args):
         sites[site]['wallhr'].append(x)
       except:
         pass
-    try:
-      float(job['eff'])
-      sites[site]['eff'].append(float(job['eff']))
-    except:
-      pass
   for site in sites.keys():
     sites[site]['ewallhr'] = stddev(sites[site]['wallhr'])
-    sites[site]['eattempt'] = stddev(sites[site]['attempt'])
     sites[site]['wallhr'] = average(sites[site]['wallhr'])
-    sites[site]['attempt'] = average(sites[site]['attempt'])
     if args.hours <= 0:
       sites[site]['done'] = null_field
-    sites[site]['eff'] = average(sites[site]['eff'])
   return sort_dict(sites, 'total')
 
 def condor_exit_code_summary(args):
@@ -354,7 +382,28 @@ def condor_exit_code_summary(args):
       x[job.get('ExitCode')] += 1
   tot = sum(x.values())
   ret = '\nExit Code Summary:\n'
+  ret += '------------------------------------------------\n'
   ret += '\n'.join(['%3d  %6.2f%%  %s'%(k,v/tot*100,exit_codes[k]) for k,v in x.items()])
+  return ret + '\n'
+
+def condor_efficiency_summary():
+  global condor_data_tallies
+  x = condor_data_tallies
+  ret = '\nEfficiency Summary:\n'
+  ret += '------------------------------------------------\n'
+  ret += 'Number of Good Job Attempts:  %10d\n'%x['goodattempts']
+  ret += 'Number of Bad Job Attempts:   %10d\n'%x['badattempts']
+  ret += '------------------------------------------------\n'
+  ret += 'Total Wall and Cpu Hours:   %.3e %.3e\n'%(x['totalwall'],x['totalcpu'])
+  ret += 'Bad Wall and Cpu Hours:     %.3e %.3e\n'%(x['badwall'],x['badcpu'])
+  ret += 'Good Wall and Cpu Hours:    %.3e %.3e\n'%(x['goodwall'],x['goodcpu'])
+  ret += '------------------------------------------------\n'
+  if x['goodwall'] > 0:
+    ret += 'Cpu Utilization of Good Jobs:        %.1f%%\n'%(100*x['goodcpu']/x['goodwall'])
+  if x['totalwall'] > 0:
+    ret += 'Good Fraction of Wall Hours:         %.1f%%\n'%(100*x['goodwall']/x['totalwall'])
+    ret += 'Total Efficiency:                    %.1f%%\n'%(100*x['goodcpu']/x['totalwall'])
+  ret += '------------------------------------------------\n'
   return ret + '\n'
 
 root_store = []
@@ -400,8 +449,12 @@ def condor_plot(args):
   h1wall_site = {}
   h1eff_gen = {}
   h1eff_site = {}
-  h1eff = ROOT.TH1D('h1eff',';Efficiency',100,0,1.5)
-  h2eff = ROOT.TH2D('h2eff',';Wall Hours;Efficiency',100,0,20,100,0,1.5)
+  h1ceff_gen = {}
+  h1ceff_site = {}
+  h1eff = ROOT.TH1D('h1eff',';CPU Utilization',100,0,1.5)
+  h2eff = ROOT.TH2D('h2eff',';Wall Hours;CPU Utilization',100,0,20,100,0,1.5)
+  h1ceff = ROOT.TH1D('h1ceff',';Cumulative Efficiency',100,0,1.5)
+  h2ceff = ROOT.TH2D('h2ceff',';Wall Hours;Cumulative Efficiency',100,0,20,100,0,1.5)
   h1att = ROOT.TH1D('h1att',';Attempts',30,0.5,30.5)
   h1wall = ROOT.TH1D('h1wall',';Wall Hours',100,0,20)
   text = ROOT.TText()
@@ -410,39 +463,55 @@ def condor_plot(args):
     if job.get('eff') is not None:
       gen = job.get('generator')
       eff = float(job.get('eff'))
+      ceff = float(job.get('ceff'))
       wall = float(job.get('wallhr'))
       site = job.get('MATCH_GLIDEIN_Site')
       if gen not in h1eff_gen:
         h1eff_gen[gen] = h1eff.Clone('h1eff_gen_%s'%gen)
         h1eff_gen[gen].Reset()
+        h1ceff_gen[gen] = h1ceff.Clone('h1ceff_gen_%s'%gen)
+        h1ceff_gen[gen].Reset()
       if site not in h1eff_site:
         h1eff_site[site] = h1eff.Clone('h1eff_site_%s'%site)
+        h1ceff_site[site] = h1ceff.Clone('h1ceff_site_%s'%site)
         h1wall_site[site] = h1wall.Clone('h1wall_site_%s'%site)
         h1eff_site[site].Reset()
+        h1ceff_site[site].Reset()
         h1wall_site[site].Reset()
-      h1eff.Fill(eff)
-      h1wall.Fill(wall)
-      h2eff.Fill(wall, eff)
-      h1att.Fill(job.get('NumJobStarts'))
-      h1eff_gen[gen].Fill(eff)
-      h1eff_site[site].Fill(eff)
-      h1wall_site[site].Fill(wall)
+      try:
+        h1eff.Fill(eff)
+        h1ceff.Fill(ceff)
+        h1wall.Fill(wall)
+        h2eff.Fill(wall, eff)
+        h2ceff.Fill(wall, ceff)
+        h1att.Fill(job.get('NumJobStarts'))
+        h1eff_gen[gen].Fill(eff)
+        h1eff_site[site].Fill(eff)
+        h1ceff_gen[gen].Fill(ceff)
+        h1ceff_site[site].Fill(ceff)
+        h1wall_site[site].Fill(wall)
+      except:
+        pass
   set_histos_max(h1eff_gen.values())
+  set_histos_max(h1ceff_gen.values())
   set_histos_max(h1eff_site.values())
+  set_histos_max(h1ceff_site.values())
   set_histos_max(h1wall_site.values())
   leg_gen = ROOT.TLegend(0.11,0.95-len(h1eff_gen)*0.05,0.3,0.95)
-  leg_site = ROOT.TLegend(0.05,0.05,0.95,0.95)
+  leg_site = ROOT.TLegend(0.3,0.2,0.9,0.95)
   root_store = [h1eff, h2eff, h1att, h1wall, leg_gen, leg_site]
   root_store.extend(h1eff_gen.values())
   root_store.extend(h1eff_site.values())
+  root_store.extend(h1ceff_gen.values())
+  root_store.extend(h1ceff_site.values())
   root_store.extend(h1wall_site.values())
   avg_eff = h1eff.GetMean()
+  avg_ceff = h1ceff.GetMean()
   avg_att = h1att.GetMean()
   can.cd(3)
   h2eff.Draw('COLZ')
   can.cd(2)
   h1att.Draw()
-  can.cd(1)
   max_sites = []
   for site in h1eff_site.keys():
     if site not in max_sites:
@@ -454,10 +523,18 @@ def condor_plot(args):
           break
       if not inserted:
         max_sites.append(site)
+  can.cd(1)
   opt = ''
   for ii,gen in enumerate(sorted(h1eff_gen.keys())):
     h1eff_gen[gen].SetLineColor(ii+1)
+    h1ceff_gen[gen].SetLineColor(ii+1)
     leg_gen.AddEntry(h1eff_gen[gen], gen, "l")
+    h1ceff_gen[gen].Draw(opt)
+    opt = 'SAME'
+  leg_gen.Draw()
+  can.cd(4)
+  opt = ''
+  for ii,gen in enumerate(sorted(h1eff_gen.keys())):
     h1eff_gen[gen].Draw(opt)
     opt = 'SAME'
   leg_gen.Draw()
@@ -468,12 +545,12 @@ def condor_plot(args):
     leg_site.AddEntry(h1eff_site[site], '%s %d'%(site,h1eff_site[site].GetEntries()), "l")
     h1eff_site[site].SetLineColor(ii+1)
     h1wall_site[site].SetLineColor(ii+1)
-    can.cd(4)
+    can.cd(5)
     h1eff_site[site].Draw(opt)
     can.cd(6)
     h1wall_site[site].Draw(opt)
     opt = 'SAME'
-  can.cd(5)
+  can.cd(2)
   leg_site.Draw()
   can.Update()
   return can
@@ -638,7 +715,7 @@ class Column():
     self.fmt = '%%-%d.%ds' % (self.width, self.width)
 
 class Table():
-  max_width = 119
+  max_width = 131
   def __init__(self):
     self.columns = []
     self.rows = []
@@ -663,7 +740,14 @@ class Table():
         except:
           pass
   def values_to_row(self, values):
-    return self.fmt % tuple([str(x).strip() for x in values])
+    # left-truncate and prefix with a '*' if a column is too long
+    x = []
+    for i,v in enumerate([str(v).strip() for v in values]):
+      if len(v) > self.columns[i].width:
+        v = '*'+v[len(v)-self.columns[i].width+1:]
+      x.append(v)
+    return self.fmt % tuple(x)
+#    return self.fmt % tuple([str(x).strip() for x in values])
   def get_tallies(self):
     # assume it's never appropriate to tally the 1st column
     values = ['tally']
@@ -713,6 +797,9 @@ class CondorTable(Table):
     ret = value
     if value is None or value == 'undefined':
       ret = null_field
+    elif name == 'NumJobStarts':
+      if value == 0:
+        ret = null_field
     elif name == 'ExitBySignal':
       ret = {True:'Y',False:'N'}[value]
     elif name == 'JobStatus':
@@ -745,7 +832,9 @@ summary_table.add_column('idle','idle',8,tally='sum')
 summary_table.add_column('held','held',8,tally='sum')
 summary_table.add_column('user','user',10)
 summary_table.add_column('gen','generator',9)
-summary_table.add_column('eff','eff',4)
+summary_table.add_column('util','eff',4)
+summary_table.add_column('ceff','ceff',4)
+summary_table.add_column('att','att',4)
 
 site_table = CondorTable()
 site_table.add_column('site','MATCH_GLIDEIN_Site',26)
@@ -756,19 +845,20 @@ site_table.add_column('idle','idle',8,tally='sum')
 site_table.add_column('held','held',8,tally='sum')
 site_table.add_column('wallhr','wallhr',6)
 site_table.add_column('stddev','ewallhr',7)
-site_table.add_column('eff','eff',4)
+site_table.add_column('util','eff',4,tally='avg')
 
 job_table = CondorTable()
 job_table.add_column('condor','condorid',13)
 job_table.add_column('gemc','gemc',6)
-job_table.add_column('site','MATCH_GLIDEIN_Site',10)
-job_table.add_column('host','LastRemoteHost',14)
+job_table.add_column('site','MATCH_GLIDEIN_Site',15)
+job_table.add_column('host','LastRemoteHost',16)
 job_table.add_column('stat','JobStatus',4)
 job_table.add_column('exit','ExitCode',4)
 job_table.add_column('sig','ExitBySignal',4)
 job_table.add_column('att','NumJobStarts',4,tally='avg')
 job_table.add_column('wallhr','wallhr',6,tally='avg')
-job_table.add_column('eff','eff',4,tally='avg')
+job_table.add_column('util','eff',4,tally='avg')
+job_table.add_column('ceff','ceff',4)
 job_table.add_column('start','JobCurrentStartDate',12)
 job_table.add_column('end','CompletionDate',12)
 job_table.add_column('user','user',10)
@@ -797,7 +887,8 @@ if __name__ == '__main__':
   cli.add_argument('-completed', default=False, action='store_true', help='limit to completed jobs')
   cli.add_argument('-summary', default=False, action='store_true', help='tabulate by cluster id instead of per-job')
   cli.add_argument('-sitesummary', default=False, action='store_true', help='tabulate by site instead of per-job')
-  cli.add_argument('-hours', default=0, metavar='#', type=float, help='look back # hours for completed jobs (default=0)')
+  cli.add_argument('-hours', default=0, metavar='#', type=float, help='look back # hours for completed jobs, reative to -end (default=0)')
+  cli.add_argument('-end', default=None, metavar='YYYY/MM/DD[_HH:MM:SS]', type=str, help='end date for look back for completed jobs (default=now)')
   cli.add_argument('-tail', default=None, metavar='#', type=int, help='print last # lines of logs (negative=all, 0=filenames)')
   cli.add_argument('-cvmfs', default=False, action='store_true', help='print hostnames from logs with CVMFS errors')
   cli.add_argument('-vacate', default=-1, metavar='#', type=float, help='vacate jobs with wall hours greater than #')
@@ -828,9 +919,23 @@ if __name__ == '__main__':
   if socket.gethostname() != 'scosg16.jlab.org' and not args.input:
     cli.error('You must be on scosg16 unless using the -input option.')
 
-  if len(args.exit) > 0:
+  if len(args.exit) > 0 and not args.parsexit:
     print('Enabling -parseexit to accommodate -exit.  This may be slow ....')
     args.parseexit = True
+
+  if args.plot and os.environ.get('DISPLAY') is None:
+    cli.error('-plot requires graphics, but $DISPLAY is not set.')
+
+  if args.end is None:
+    args.end = datetime.datetime.now()
+  else:
+    try:
+      args.end = datetime.datetime.strptime(args.end,'%Y/%m/%d_%H:%M:%S')
+    except:
+      try:
+        args.end = datetime.datetime.strptime(args.end,'%Y/%m/%d')
+      except:
+        cli.error('Invalid date format for -end:  '+args.end)
 
   if args.input:
     condor_read(args)
@@ -886,6 +991,7 @@ if __name__ == '__main__':
         print(job_table)
       if args.held or args.completed:
         print(condor_exit_code_summary(args))
+      print(condor_efficiency_summary())
 
   sys.exit(0)
 
