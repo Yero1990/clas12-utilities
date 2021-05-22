@@ -919,7 +919,7 @@ if __name__ == '__main__':
   if socket.gethostname() != 'scosg16.jlab.org' and not args.input:
     cli.error('You must be on scosg16 unless using the -input option.')
 
-  if len(args.exit) > 0 and not args.parsexit:
+  if len(args.exit) > 0 and not args.parseexit:
     print('Enabling -parseexit to accommodate -exit.  This may be slow ....')
     args.parseexit = True
 
