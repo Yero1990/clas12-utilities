@@ -36,7 +36,7 @@ cvmfs_error_strings = [ 'Loaded environment state is inconsistent',
 ###########################################################
 ###########################################################
 
-condor_data_tallies = {'goodwall':0, 'badwall':0, 'goodcpu':0, 'badcpu':0, 'goodattempts':0, 'badattempts':0}
+condor_data_tallies = {'goodwall':0, 'badwall':0, 'goodcpu':0, 'badcpu':0, 'goodattempts':0, 'badattempts':0, 'attempts':[]}
 condor_data = collections.OrderedDict()
 
 def condor_query(args):
@@ -58,7 +58,9 @@ def condor_query(args):
 
 def condor_read(args):
   global condor_data
-  condor_data = json.load(open(args.input,'r'))
+  for x in json.load(open(args.input,'r')):
+    if 'ClusterId' in x and 'ProcId' in x:
+      condor_data['%d.%d'%(x['ClusterId'],x['ProcId'])] = x
   condor_munge(args)
 
 def condor_write(path):
@@ -169,6 +171,8 @@ def condor_tally(job):
   global condor_data_tallies
   x = condor_data_tallies
   if job_states[job['JobStatus']] == 'C' or job_states[job['JobStatus']] == 'R':
+    if job['NumJobStarts'] > 0:
+      x['attempts'].append(job['NumJobStarts'])
     if job_states[job['JobStatus']] == 'C':
       x['goodattempts'] += 1
       x['goodwall'] += float(job['wallhr'])*60*60
@@ -389,22 +393,25 @@ def condor_exit_code_summary(args):
 def condor_efficiency_summary():
   global condor_data_tallies
   x = condor_data_tallies
-  ret = '\nEfficiency Summary:\n'
-  ret += '------------------------------------------------\n'
-  ret += 'Number of Good Job Attempts:  %10d\n'%x['goodattempts']
-  ret += 'Number of Bad Job Attempts:   %10d\n'%x['badattempts']
-  ret += '------------------------------------------------\n'
-  ret += 'Total Wall and Cpu Hours:   %.3e %.3e\n'%(x['totalwall'],x['totalcpu'])
-  ret += 'Bad Wall and Cpu Hours:     %.3e %.3e\n'%(x['badwall'],x['badcpu'])
-  ret += 'Good Wall and Cpu Hours:    %.3e %.3e\n'%(x['goodwall'],x['goodcpu'])
-  ret += '------------------------------------------------\n'
-  if x['goodwall'] > 0:
-    ret += 'Cpu Utilization of Good Jobs:        %.1f%%\n'%(100*x['goodcpu']/x['goodwall'])
-  if x['totalwall'] > 0:
-    ret += 'Good Fraction of Wall Hours:         %.1f%%\n'%(100*x['goodwall']/x['totalwall'])
-    ret += 'Total Efficiency:                    %.1f%%\n'%(100*x['goodcpu']/x['totalwall'])
-  ret += '------------------------------------------------\n'
-  return ret + '\n'
+  ret = ''
+  if len(x['attempts']) > 0:
+    ret += '\nEfficiency Summary:\n'
+    ret += '------------------------------------------------\n'
+    ret += 'Number of Good Job Attempts:  %10d\n'%x['goodattempts']
+    ret += 'Number of Bad Job Attempts:   %10d\n'%x['badattempts']
+    ret += 'Average # of Job Attempts:    % 10.1f\n'%(sum(x['attempts'])/len(x['attempts']))
+    ret += '------------------------------------------------\n'
+    ret += 'Total Wall and Cpu Hours:   %.3e %.3e\n'%(x['totalwall'],x['totalcpu'])
+    ret += 'Bad Wall and Cpu Hours:     %.3e %.3e\n'%(x['badwall'],x['badcpu'])
+    ret += 'Good Wall and Cpu Hours:    %.3e %.3e\n'%(x['goodwall'],x['goodcpu'])
+    ret += '------------------------------------------------\n'
+    if x['goodwall'] > 0:
+      ret += 'Cpu Utilization of Good Jobs:        %.1f%%\n'%(100*x['goodcpu']/x['goodwall'])
+    if x['totalwall'] > 0:
+      ret += 'Good Fraction of Wall Hours:         %.1f%%\n'%(100*x['goodwall']/x['totalwall'])
+      ret += 'Total Efficiency:                    %.1f%%\n'%(100*x['goodcpu']/x['totalwall'])
+    ret += '------------------------------------------------\n\n'
+  return ret
 
 root_store = []
 def condor_plot(args):
@@ -989,7 +996,7 @@ if __name__ == '__main__':
           print(site_table.add_jobs(condor_site_summary(args)))
       else:
         print(job_table)
-      if args.held or args.completed:
+      if (args.held or args.idle) and args.parseexit:
         print(condor_exit_code_summary(args))
       print(condor_efficiency_summary())
 
