@@ -58,9 +58,15 @@ def condor_query(args):
 
 def condor_read(args):
   global condor_data
-  for x in json.load(open(args.input,'r')):
-    if 'ClusterId' in x and 'ProcId' in x:
-      condor_data['%d.%d'%(x['ClusterId'],x['ProcId'])] = x
+  data = json.load(open(args.input,'r'))
+  if type(data) is list:
+    for x in data:
+      if 'ClusterId' in x and 'ProcId' in x:
+        condor_data['%d.%d'%(x['ClusterId'],x['ProcId'])] = x
+  elif type(data) is dict:
+    condor_data = data
+  else:
+    raise TypeError()
   condor_munge(args)
 
 def condor_write(path):
@@ -420,6 +426,14 @@ def condor_plot(args):
   # it doesn't like, maybe ones starting with "h" (help).  Hopefully there
   # is a better way, but here we override sys.argv to avoid that:
   sys.argv = []
+  abort = True
+  for condor_id,job in condor_yield(args):
+    if job.get('eff') is not None:
+      abort = False
+      break
+  if abort:
+    print('Found no completed jobs to plot.')
+    return None
   import ROOT
   ROOT.gStyle.SetCanvasColor(0)
   ROOT.gStyle.SetPadColor(0)
@@ -661,6 +675,7 @@ def get_generator(job):
     if job.get('UserLog') is not None:
       job_script = os.path.dirname(os.path.dirname(job.get('UserLog')))+'/nodeScript.sh'
       for line in readlines(job_script):
+        line = line.lower()
         m = re.search('events with generator >(.*)< with options', line)
         if m is not None:
           if m.group(1).startswith('clas12-'):
@@ -959,7 +974,7 @@ if __name__ == '__main__':
 
   if args.plot is not False:
     c = condor_plot(args)
-    if args.plot is not True:
+    if c is not None and args.plot is not True:
       c.SaveAs(args.plot)
     print('Done Plotting.  Press Return to close.')
     input()
