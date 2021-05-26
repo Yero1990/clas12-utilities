@@ -393,7 +393,7 @@ def condor_exit_code_summary(args):
   tot = sum(x.values())
   ret = '\nExit Code Summary:\n'
   ret += '------------------------------------------------\n'
-  ret += '\n'.join(['%4s  %6.2f%%  %s'%(k,v/tot*100,exit_codes.get(k)) for k,v in x.items()])
+  ret += '\n'.join(['%4s  %8d %6.2f%%  %s'%(k,v,v/tot*100,exit_codes.get(k)) for k,v in x.items()])
   return ret + '\n'
 
 def condor_efficiency_summary():
