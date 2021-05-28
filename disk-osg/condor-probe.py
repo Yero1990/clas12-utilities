@@ -521,7 +521,7 @@ def condor_plot(args):
   set_histos_max(h1ceff_site.values())
   set_histos_max(h1wall_site.values())
   leg_gen = ROOT.TLegend(0.11,0.95-len(h1eff_gen)*0.05,0.3,0.95)
-  leg_site = ROOT.TLegend(0.11,0.12,0.95,0.95)
+  leg_site = ROOT.TLegend(0.11,0.12,0.91,0.95)
   root_store = [h1eff, h2eff, h1ceff, h2ceff, h2att, h1att, h1wall, leg_gen, leg_site]
   root_store.extend(h1eff_gen.values())
   root_store.extend(h1eff_site.values())
