@@ -464,8 +464,8 @@ def condor_plot(args):
   ROOT.gStyle.SetOptStat(0)
   ROOT.gStyle.SetHistMinimumZero(ROOT.kTRUE)
   ROOT.gROOT.ForceStyle()
-  can = ROOT.TCanvas('can','',900,500)
-  can.Divide(3,2)
+  can = ROOT.TCanvas('can','',900,700)
+  can.Divide(3,3)
   can.Draw()
   h1wall_site = {}
   h1eff_gen = {}
@@ -476,6 +476,7 @@ def condor_plot(args):
   h2eff = ROOT.TH2D('h2eff',';Wall Hours;CPU Utilization',100,0,20,100,0,1.5)
   h1ceff = ROOT.TH1D('h1ceff',';Cumulative Efficiency',100,0,1.5)
   h2ceff = ROOT.TH2D('h2ceff',';Wall Hours;Cumulative Efficiency',100,0,20,100,0,1.5)
+  h2att = ROOT.TH2D('h2att',';Attempts;Cumulative Efficiency',20,0.5,20.5,100,0,1.5)
   h1att = ROOT.TH1D('h1att',';Attempts',30,0.5,30.5)
   h1wall = ROOT.TH1D('h1wall',';Wall Hours',100,0,20)
   text = ROOT.TText()
@@ -505,6 +506,7 @@ def condor_plot(args):
         h1wall.Fill(wall)
         h2eff.Fill(wall, eff)
         h2ceff.Fill(wall, ceff)
+        h2att.Fill(job.get('NumJobStarts'), ceff)
         h1att.Fill(job.get('NumJobStarts'))
         h1eff_gen[gen].Fill(eff)
         h1eff_site[site].Fill(eff)
@@ -519,8 +521,8 @@ def condor_plot(args):
   set_histos_max(h1ceff_site.values())
   set_histos_max(h1wall_site.values())
   leg_gen = ROOT.TLegend(0.11,0.95-len(h1eff_gen)*0.05,0.3,0.95)
-  leg_site = ROOT.TLegend(0.3,0.2,0.9,0.95)
-  root_store = [h1eff, h2eff, h1att, h1wall, leg_gen, leg_site]
+  leg_site = ROOT.TLegend(0.11,0.12,0.95,0.95)
+  root_store = [h1eff, h2eff, h1ceff, h2ceff, h2att, h1att, h1wall, leg_gen, leg_site]
   root_store.extend(h1eff_gen.values())
   root_store.extend(h1eff_site.values())
   root_store.extend(h1ceff_gen.values())
@@ -530,7 +532,11 @@ def condor_plot(args):
   avg_ceff = h1ceff.GetMean()
   avg_att = h1att.GetMean()
   can.cd(3)
+  h2att.Draw('COLZ')
+  can.cd(9)
   h2eff.Draw('COLZ')
+  can.cd(6)
+  h2ceff.Draw('COLZ')
   can.cd(2)
   h1att.Draw()
   max_sites = []
@@ -566,12 +572,12 @@ def condor_plot(args):
     leg_site.AddEntry(h1eff_site[site], '%s %d'%(site,h1eff_site[site].GetEntries()), "l")
     h1eff_site[site].SetLineColor(ii+1)
     h1wall_site[site].SetLineColor(ii+1)
-    can.cd(5)
+    can.cd(7)
     h1eff_site[site].Draw(opt)
-    can.cd(6)
+    can.cd(8)
     h1wall_site[site].Draw(opt)
     opt = 'SAME'
-  can.cd(2)
+  can.cd(5)
   leg_site.Draw()
   can.Update()
   return can
