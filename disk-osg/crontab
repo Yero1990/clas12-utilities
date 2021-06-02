@@ -17,11 +17,12 @@ d=/group/clas12/packages/clas12-utilities/disk-osg
 # This transfers data from the submit node to Lustre:
 10   *  *  *  * flock -n ~/.osgpool.lock $d/transfer.sh || echo "ERROR:  Previous transfer cronjob still running"
 #
-# These check for CVMFS errors on remote nodes (the 2nd one sends a daily summary email):
+# These check for CVMFS errors on remote nodes:
 20 1-23/2  *  *  * flock -n ~/.condor.lock $d/check-cvmfs.sh || echo "ERROR:  Previous condor cronjob still running"
-20   8     *  *  * flock -n ~/.condor.lock $d/check-cvmfs.sh 1 || echo "ERROR:  Previous condor cronjob still running"
 #
-# These check for stalled jobs and vacates them (the 2nd one sends a daily summary email):
+# These check for stalled jobs and vacates them:
 50 0-22/2  *  *  * flock -n ~/.condor.lock $d/vacate-stalls.sh || echo "ERROR:  Previous condor cronjob still running"
-50   7     *  *  * flock -n ~/.condor.lock $d/vacate-stalls.sh 1 || echo "ERROR:  Previous condor cronjob still running"
+#
+# This emails the daily digest of above errors and vacates, and attaches a plot summary: 
+0    7     *  *  * $d/daily-digest.sh
 #
