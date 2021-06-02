@@ -461,7 +461,8 @@ def condor_plot(args):
   ROOT.gStyle.SetGridColor(15)
   ROOT.gStyle.SetPadGridX(1)
   ROOT.gStyle.SetPadGridY(1)
-  ROOT.gStyle.SetOptStat(0)
+  ROOT.gStyle.SetOptStat('emr')
+  ROOT.gStyle.SetStatW(0.3)
   ROOT.gStyle.SetHistMinimumZero(ROOT.kTRUE)
   ROOT.gROOT.ForceStyle()
   can = ROOT.TCanvas('can','',900,700)
@@ -528,6 +529,12 @@ def condor_plot(args):
   root_store.extend(h1ceff_gen.values())
   root_store.extend(h1ceff_site.values())
   root_store.extend(h1wall_site.values())
+  for x in root_store:
+    try:
+      x.SetStats(ROOT.kFALSE)
+    except:
+      pass
+  h1att.SetStats(ROOT.kTRUE)
   avg_eff = h1eff.GetMean()
   avg_ceff = h1ceff.GetMean()
   avg_att = h1att.GetMean()
@@ -965,6 +972,9 @@ if __name__ == '__main__':
       except:
         cli.error('Invalid date format for -end:  '+args.end)
 
+  if args.plot is not False:
+    import ROOT
+
   if args.input:
     condor_read(args)
   else:
@@ -982,8 +992,9 @@ if __name__ == '__main__':
     c = condor_plot(args)
     if c is not None and args.plot is not True:
       c.SaveAs(args.plot)
-    print('Done Plotting.  Press Return to close.')
-    input()
+    else:
+      print('Done Plotting.  Press Return to close.')
+      input()
     sys.exit(0)
 
   for cid,job in condor_yield(args):
