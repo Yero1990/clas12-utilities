@@ -476,7 +476,7 @@ def condor_plot(args):
   h1eff = ROOT.TH1D('h1eff',';CPU Utilization',100,0,1.5)
   h2eff = ROOT.TH2D('h2eff',';Wall Hours;CPU Utilization',100,0,20,100,0,1.5)
   h1ceff = ROOT.TH1D('h1ceff',';Cumulative Efficiency',100,0,1.5)
-  h2ceff = ROOT.TH2D('h2ceff',';Wall Hours;Cumulative Efficiency',100,0,20,100,0,1.5)
+  h2ceff = ROOT.TH2D('h2ceff',';Cumulative Wall Hours;Cumulative Efficiency',100,0,20,100,0,1.5)
   h2att = ROOT.TH2D('h2att',';Attempts;Cumulative Efficiency',20,0.5,20.5,100,0,1.5)
   h1att = ROOT.TH1D('h1att',';Attempts',20,0.5,20.5)
   h1wall = ROOT.TH1D('h1wall',';Wall Hours',100,0,20)
@@ -488,6 +488,7 @@ def condor_plot(args):
       eff = float(job.get('eff'))
       ceff = float(job.get('ceff'))
       wall = float(job.get('wallhr'))
+      cwall = float(job.get('CumulativeSlotTime'))/60/60
       site = job.get('MATCH_GLIDEIN_Site')
       if gen not in h1eff_gen:
         h1eff_gen[gen] = h1eff.Clone('h1eff_gen_%s'%gen)
@@ -506,7 +507,7 @@ def condor_plot(args):
         h1ceff.Fill(ceff)
         h1wall.Fill(wall)
         h2eff.Fill(wall, eff)
-        h2ceff.Fill(wall, ceff)
+        h2ceff.Fill(cwall, ceff)
         h2att.Fill(job.get('NumJobStarts'), ceff)
         h1att.Fill(job.get('NumJobStarts'))
         h1eff_gen[gen].Fill(eff)
