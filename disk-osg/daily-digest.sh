@@ -6,9 +6,10 @@ dirname="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 
 mkdir -p /osgpool/hallb/clas12/gemc/daily
 timestamp=$(date +%Y%m%d_%H%M%S)
-plotfile=$(mktemp /osgpool/hallb/clas12/gemc/daily/$timestamp.XXXXXX.pdf)
-emailbody=$(mktemp /osgpool/hallb/clas12/gemc/daily/$timestamp.XXXXXX.txt)
+plotfile=$(mktemp /osgpool/hallb/clas12/gemc/daily/$timestamp\_XXXXXX.pdf)
+emailbody=$(mktemp /osgpool/hallb/clas12/gemc/daily/$timestamp\_XXXXXX.txt)
 touch $emailbody
+plotfilelogscale=${plotfile%%.*}-logscale.pdf
 
 function munge {
     # 1. remove username, keeping only site, host, and job ids
@@ -40,5 +41,5 @@ source /group/clas12/packages/setup.sh
 module load clas12/dev
 $dirname/condor-probe.py -completed -hours 24 -plot $plotfile >& /dev/null
 
-cat $emailbody | mail -a $plotfile -s OSG-CLAS12-Daily-Digest $recipients
+cat $emailbody | mail -a $plotfile -a $plotfilelogscale -s OSG-CLAS12-Daily-Digest $recipients
 
