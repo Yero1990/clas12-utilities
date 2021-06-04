@@ -788,24 +788,26 @@ def get_generator(job):
   return generators.get('ClusterId')
 
 def clas12mon(args):
-  data = job_counts.copy()
+  summary = job_counts.copy()
   for job in condor_cluster_summary(args).values():
-    for x in data.keys():
-      data[x] += job[x]
-  data.pop('done')
-  data.pop('total')
+    for x in summary.keys():
+      summary[x] += job[x]
+  summary.pop('done')
+  summary.pop('total')
+  sites = {}
+  for site,val in condor_site_summary(args).items():
+    if site is not None:
+      sites[site] = val['run']
+  data = {}
+  data['global'] = summary
+  data['sites'] = sites
   data['update_ts'] = int(datetime.datetime.now().timestamp())
-  print(json.dumps(data, **json_format))
-  return
-  if getpass.getuser() is not 'gemc':
-    print('ERROR:  Only user=gemc can publish to clas12mon.')
-    sys.exit(1)
-  auth = os.getenv('HOME')+'/.clas12mon.auth'
-  if not os.path.isfile(auth):
-    print('ERROR:  Authorization file does not exist:  '+auth)
-  url = 'https://clas12mon.jlab.org/api/OSGEntries'
-  auth = open(auth).read().strip()
-  return requests.post(url, data=data, headers={'Authorization':auth})
+  if os.access('/osgpool/hallb/clas12/gemc/timeline.json', os.W_OK):
+    with open('/osgpool/hallb/clas12/gemc/timeline.json','r') as f:
+      cache = json.load(f)
+    with open('/osgpool/hallb/clas12/gemc/timeline.json','w') as f:
+      cache.append(data)
+      f.write(json.dumps(cache, **json_format))
 
 def tail_log(job, nlines):
   print(''.ljust(80,'#'))
