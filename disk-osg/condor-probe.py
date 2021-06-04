@@ -15,6 +15,7 @@ import json
 import time
 import math
 import gzip
+import shutil
 import socket
 import getpass
 import argparse
@@ -802,12 +803,18 @@ def clas12mon(args):
   data['global'] = summary
   data['sites'] = sites
   data['update_ts'] = int(datetime.datetime.now().timestamp())
-  if os.access('/osgpool/hallb/clas12/gemc/timeline.json', os.W_OK):
-    with open('/osgpool/hallb/clas12/gemc/timeline.json','r') as f:
+  path = '/osgpool/hallb/clas12/gemc/timeline.json'
+  webdir = '/u/group/clas/www/clasweb-2015/html/clas12offline/osg'
+  if not os.path.exists(path) or os.access(path, os.W_OK):
+    with open(path,'r') as f:
       cache = json.load(f)
-    with open('/osgpool/hallb/clas12/gemc/timeline.json','w') as f:
+    with open(path,'w') as f:
       cache.append(data)
       f.write(json.dumps(cache, **json_format))
+    shutil.copy(path,webdir)
+    now = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    archive = webdir+'/archive/timeline-%s.json'%now
+    shutil.copy(path,archive)
 
 def tail_log(job, nlines):
   print(''.ljust(80,'#'))
