@@ -803,7 +803,7 @@ def timeline(args):
   summary.pop('total')
   summary['attempts'] = 0
   if len(attempts) > 0:
-    summary['attempts'] = sum(attempts) / len(attempts)
+    summary['attempts'] = round(sum(attempts) / len(attempts),2)
   sites = {}
   for site,val in condor_site_summary(args).items():
     if site is not None:
