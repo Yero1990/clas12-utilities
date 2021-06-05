@@ -789,12 +789,21 @@ def get_generator(job):
   return generators.get('ClusterId')
 
 def timeline(args):
+  attempts = []
+  for condor_id,job in condor_yield(args):
+    try:
+      attempts.append(int(job['NumJobStarts']))
+    except:
+      pass
   summary = job_counts.copy()
   for job in condor_cluster_summary(args).values():
     for x in summary.keys():
       summary[x] += job[x]
   summary.pop('done')
   summary.pop('total')
+  summary['attempts'] = 0
+  if len(attempts) > 0:
+    summary['attempts'] = sum(attempts) / len(attempts)
   sites = {}
   for site,val in condor_site_summary(args).items():
     if site is not None:
@@ -805,6 +814,8 @@ def timeline(args):
   data['update_ts'] = int(datetime.datetime.now().timestamp())
   path = '/osgpool/hallb/clas12/gemc/timeline.json'
   webdir = '/u/group/clas/www/clasweb-2015/html/clas12offline/osg'
+  #print(json.dumps(data, **json_format))
+  #return
   if not os.path.exists(path) or os.access(path, os.W_OK):
     with open(path,'r') as f:
       cache = json.load(f)
