@@ -1,0 +1,104 @@
+<html>
+<head>
+<title> CLAS12@OSG Timelines </title>
+<script src="lib/highcharts/highcharts.src.js"></script>
+<script src="lib/jquery.min.js"></script>
+<script src="lib/moment/moment.min.js"></script>
+<script src="lib/moment/moment-timezone-with-data-2012-2022.min.js"></script>
+<script src="lib/highcharts/stock/modules/exporting.js"></script>
+<script src="lib/highcharts/dark-unica.js"></script>
+</head>
+<body style="background-color:#333334;">
+
+<script>
+
+function makechart(div, name, data, xmin, secondary=undefined) {
+    series = []
+    for (var label in data) {
+        if (secondary == undefined) {
+          series.push({name:label, data:data[label]})
+        }
+        else {
+            series.push({name:label, data:data[label], marker:{enabled:false}})
+        }
+    }
+
+    var yax = {title: {text: '# Jobs'} }
+    if (secondary != undefined) {
+        yax = [ yax,
+            { opposite: true, min: 0, 
+              labels : { style : { color : Highcharts.getOptions().colors[4] } },
+              title  : { text: 'Average Attempts' , style : { color : Highcharts.getOptions().colors[4] } }
+            }
+        ]
+        for (var y in secondary) {
+            series.push({name:y, data:secondary[y], yAxis:1, dashStyle:'shortdot', showInLegend:false, marker: {enabled: false}, lineWidth:2})
+        }
+    }
+
+    const chart = Highcharts.chart(div, {
+        plotOptions: { series: { lineWidth:1 } },
+        tooltip: { shared: true },
+        chart: { zoomType: 'xy', borderWidth:1, borderRadius:5, borderColor:'grey'},
+        title: { text: name },
+        yAxis: yax,
+        xAxis: { type: 'datetime', min: xmin },
+        time: { timezone: 'America/New_York' },
+        legend: { margin: 0, backgroundColor: 'rgba(0,0,0,0.01)'},
+        exporting: { buttons: {log: { text:'Log', onclick: function(){this.yAxis[0].update({type:'logarithmic'});} },
+                               linear: { text:'Linear', onclick: function(){this.yAxis[0].update({type:'linear'});} } } },
+        series: series
+    })
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const global = {'idle':[],'run':[]}
+    const sites = {}
+    const attempts = [] 
+    const sites_nonopp = {}
+    const sites_opp = {}
+    const nonopp = ['SU-ITS','SGridGLA','CNAF','GRIF','MIT','UConn','UConn-HPC']
+    min = 999999999999999
+    $.getJSON('timeline.json', function(data) {
+        data => data.sort((a,b)=>a.entry.update_ts-b.entry.update_ts)
+        data.forEach( entry => {
+            entry.update_ts = entry.update_ts*1000
+            if (entry.update_ts < min) {
+                min = entry.update_ts
+            }
+            for (var site in entry['sites']) {
+                if (sites[site] == undefined) sites[site] = []
+                sites[site].push( [entry.update_ts, entry['sites'][site]] )
+                if (nonopp.includes(site)) {
+                  if (sites_nonopp[site] == undefined) sites_nonopp[site] = []
+                    sites_nonopp[site].push( [entry.update_ts, entry['sites'][site]] )
+                }
+                else {
+                  if (sites_opp[site] == undefined) sites_opp[site] = []
+                    sites_opp[site].push( [entry.update_ts, entry['sites'][site]] )
+                }
+            }
+            for (var g in entry['global']) {
+                if (g === 'attempts') {
+                    attempts.push( [entry.update_ts, entry['global'][g]] )
+                }
+                else {
+                    if (global[g] == undefined) global[g] = []
+                    global[g].push( [entry.update_ts, entry['global'][g]] )
+                }
+            }
+        })
+        makechart('chart1','Queued States',global,min,{'attempts':attempts})
+        //makechart('chart2','Running',sites,min,'linear')
+        makechart('chart2','Running - Dedicated/Priority',sites_nonopp,min)
+        makechart('chart3','Running - Opportunistic',sites_opp,min)
+    })
+  })
+</script>
+
+<!--<h2><center>CLAS12@OSG Job Timelines</center></h2>-->
+<div id="chart1" style="width: 100%; height: 250px"></div>
+<div id="chart2" style="width: 100%; height: 250px"></div>
+<div id="chart3" style="width: 100%; height: 325px"></div>
+</body>
+</html>
