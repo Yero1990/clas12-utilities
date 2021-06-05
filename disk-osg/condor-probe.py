@@ -788,7 +788,7 @@ def get_generator(job):
           break
   return generators.get('ClusterId')
 
-def clas12mon(args):
+def timeline(args):
   summary = job_counts.copy()
   for job in condor_cluster_summary(args).values():
     for x in summary.keys():
@@ -815,6 +815,8 @@ def clas12mon(args):
     now = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     archive = webdir+'/archive/timeline-%s.json'%now
     shutil.copy(path,archive)
+    cmd = ['find',webdir+'/archive/','-name','*.json','-ctime','+14','-delete']
+    subprocess.check_output(cmd)
 
 def tail_log(job, nlines):
   print(''.ljust(80,'#'))
@@ -1022,7 +1024,7 @@ if __name__ == '__main__':
   cli.add_argument('-hold', default=False, action='store_true', help='send matching jobs to hold state (be careful!!!)')
   cli.add_argument('-json', default=False, action='store_true', help='print full condor data in JSON format')
   cli.add_argument('-input', default=False, metavar='FILEPATH', type=str, help='read condor data from a JSON file instead of querying')
-  cli.add_argument('-clas12mon', default=False, action='store_true', help='publish results to clas12mon for timelines')
+  cli.add_argument('-timeline', default=False, action='store_true', help='publish results for timeline generation')
   cli.add_argument('-parseexit', default=False, action='store_true', help='parse log files for exit codes')
   cli.add_argument('-printexit', default=False, action='store_true', help='just print the exit code definitions')
   cli.add_argument('-plot', default=False, metavar='FILEPATH', const=True, nargs='?', help='generate plots (requires ROOT)')
@@ -1072,8 +1074,8 @@ if __name__ == '__main__':
   else:
     condor_query(args)
 
-  if args.clas12mon:
-    clas12mon(args)
+  if args.timeline:
+    timeline(args)
     sys.exit(0)
 
   if args.json:
