@@ -821,7 +821,7 @@ def timeline(args):
       cache = json.load(f)
     with open(path,'w') as f:
       cache.append(data)
-      f.write(json.dumps(cache, **json_format))
+      f.write(json.dumps(cache))
     shutil.copy(path,webdir)
     now = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     archive = webdir+'/archive/timeline-%s.json'%now
