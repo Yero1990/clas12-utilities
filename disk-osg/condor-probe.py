@@ -755,6 +755,12 @@ def check_cvmfs(job):
         return False
   return True
 
+def check_xrootd(job):
+  if job.get('ExitCode') is not None:
+    if job.get('ExitCode') == 212:
+      return False
+  return True
+
 def get_exit_code(job):
   '''Extract the exit code from the log file'''
   try:
@@ -1062,6 +1068,7 @@ if __name__ == '__main__':
   cli.add_argument('-end', default=None, metavar='YYYY/MM/DD[_HH:MM:SS]', type=str, help='end date for look back for completed jobs (default=now)')
   cli.add_argument('-tail', default=None, metavar='#', type=int, help='print last # lines of logs (negative=all, 0=filenames)')
   cli.add_argument('-cvmfs', default=False, action='store_true', help='print hostnames from logs with CVMFS errors')
+  cli.add_argument('-xrootd', default=False, action='store_true', help='print hostnames from logs with XRootD errors')
   cli.add_argument('-vacate', default=-1, metavar='#', type=float, help='vacate jobs with wall hours greater than #')
   cli.add_argument('-hold', default=False, action='store_true', help='send matching jobs to hold state (be careful!!!)')
   cli.add_argument('-json', default=False, action='store_true', help='print full condor data in JSON format')
@@ -1150,6 +1157,11 @@ if __name__ == '__main__':
 
     elif args.cvmfs:
       if not check_cvmfs(job):
+        if 'LastRemoteHost' in job:
+          print(job.get('MATCH_GLIDEIN_Site')+' '+job['LastRemoteHost']+' '+cid)
+
+    elif args.xrootd:
+      if not check_xrootd(job):
         if 'LastRemoteHost' in job:
           print(job.get('MATCH_GLIDEIN_Site')+' '+job['LastRemoteHost']+' '+cid)
 

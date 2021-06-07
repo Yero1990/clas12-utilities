@@ -26,9 +26,9 @@ echo Nodes with CVMFS issues in the past 24 hours: >> $emailbody
 munge $cvmfs_cache >> $emailbody
 echo  >> $emailbody
 
-#echo Nodes with XRootD issues in the past 24 hours: >> $emailbody
-#munge $xrootd_cache >> $emailbody
-#echo >> $emailbody
+echo Nodes with XRootD issues in the past 24 hours: >> $emailbody
+munge $xrootd_cache >> $emailbody
+echo >> $emailbody
 
 echo Vacated jobs in the past 24 hours: >> $emailbody
 munge $vacate_cache >> $emailbody

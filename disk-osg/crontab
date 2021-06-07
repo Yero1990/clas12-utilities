@@ -1,7 +1,7 @@
 SHELL=/bin/bash
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 MAILTO=baltzell@jlab.org,ungaro@jlab.org,devita@jlab.org
-d=/group/clas12/packages/clas12-utilities/disk-osg
+d=/group/clas12/packages/clas12-utilities/dev/disk-osg
 #
 # .---------------- minute (0 - 59)
 # |  .------------- hour (0 - 23)
@@ -11,17 +11,23 @@ d=/group/clas12/packages/clas12-utilities/disk-osg
 # |  |  |  |  |
 # *  *  *  *  * user-name  command to be executed
 # These submit jobs:
-*/1  *  *  *  * ~/gemcSubmitCron.sh >& ~/submitCron.log
-*/2  *  *  *  * ~/priorityCron.sh >& ~/priorityCron.log
+*/2  *  *  *  * flock -n $HOME/.submit.lock $HOME/gemcSubmitCron.sh >& $HOME/submitCron.log
+*/5  *  *  *  * flock -n $HOME/.osgpriority.lock $HOME/priorityCron.sh >& $HOME/priorityCron.log
 #
-# This transfers data from the submit node to Lustre:
+# This transfers data from the submit node to Lustre and does cleanup:
 10   *  *  *  * flock -n ~/.osgpool.lock $d/transfer.sh || echo "ERROR:  Previous transfer cronjob still running"
 #
 # These check for CVMFS errors on remote nodes:
-20 1-23/2  *  *  * flock -n ~/.condor.lock $d/check-cvmfs.sh || echo "ERROR:  Previous condor cronjob still running"
+20 1-23/2  *  *  * flock -n $HOME/.condor.lock $d/check-cvmfs.sh || echo "ERROR:  Previous condor cronjob still running"
+#
+# These check for XRootD errors on remote nodes:
+30 1-23/2  *  *  * flock -n $HOME/.condor.lock $d/check-xrootd.sh || echo "ERROR:  Previous condor cronjob still running"
 #
 # These check for stalled jobs and vacates them:
-50 0-22/2  *  *  * flock -n ~/.condor.lock $d/vacate-stalls.sh || echo "ERROR:  Previous condor cronjob still running"
+20 0-22/2  *  *  * flock -n $HOME/.condor.lock $d/vacate-stalls.sh || echo "ERROR:  Previous condor cronjob still running"
+#
+# This updates the timeline archive:
+10,40  *   *  *  * flock -n $HOME/.condor.lock $d/condor-probe.py -timeline
 #
 # This emails the daily digest of above errors and vacates, and attaches a plot summary: 
 0    7     *  *  * $d/daily-digest.sh
