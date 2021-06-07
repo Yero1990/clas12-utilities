@@ -805,7 +805,9 @@ def make_timeline_entry(args):
   attempts = []
   for condor_id,job in condor_yield(args):
     try:
-      attempts.append(int(job['NumJobStarts']))
+      n = int(job['NumJobStarts'])
+      if n > 0:
+        attempts.append(n)
     except:
       pass
   summary['attempts'] = 0
