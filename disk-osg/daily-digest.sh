@@ -20,7 +20,7 @@ function munge {
 
 cvmfs_cache=$HOME/cvmfs-errors.txt
 vacate_cache=$HOME/vacate-stalls.txt
-xrootd_cache=$HOME/xrootd-stalls.txt
+xrootd_cache=$HOME/xrootd-errors.txt
 
 echo Nodes with CVMFS issues in the past 24 hours: >> $emailbody
 munge $cvmfs_cache >> $emailbody
