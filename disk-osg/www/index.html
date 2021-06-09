@@ -14,13 +14,20 @@
 
 function makechart(div, name, data, xmin, secondary=undefined) {
     series = []
+    n = 0
     for (var label in data) {
         if (secondary == undefined) {
-          series.push({name:label, data:data[label]})
+            series.push({name:label, data:data[label]})
         }
         else {
-            series.push({name:label, data:data[label], marker:{enabled:false}})
+            series.push({name:label, data:data[label], marker:{enabled:false}, type:'area',
+              fillColor:{ linearGradient: {x1:0,y1:0,x2:0,y2:1},
+              stops: [ [0,Highcharts.color(Highcharts.getOptions().colors[n]).setOpacity(0.4).get('rgba')],
+                     [1,Highcharts.color(Highcharts.getOptions().colors[n]).setOpacity(0).get('rgba')] ]
+              }
+            })
         }
+        n += 1
     }
 
     var yax = {title: {text: '# Jobs'} }
@@ -28,25 +35,51 @@ function makechart(div, name, data, xmin, secondary=undefined) {
         yax = [ yax,
             { opposite: true, min: 0, 
               labels : { style : { color : Highcharts.getOptions().colors[4] } },
-              title  : { text: 'Average Attempts' , style : { color : Highcharts.getOptions().colors[4] } }
+              title  : { text: 'Attempts' , style : { color : Highcharts.getOptions().colors[4] } }
             }
         ]
         for (var y in secondary) {
-            series.push({name:y, data:secondary[y], yAxis:1, dashStyle:'shortdot', showInLegend:false, marker: {enabled: false}, lineWidth:2})
+            series.push({name:y, data:secondary[y], yAxis:1, dashStyle:'dash', showInLegend:false, marker: {enabled: false}})
         }
     }
 
     const chart = Highcharts.chart(div, {
-        plotOptions: { series: { lineWidth:1 } },
+        plotOptions: { series: { lineWidth:1, step:true},
+            //line: {
+            //    events: {
+            //        legendItemClick: function() {
+            //            var seriesIndex = this.index;
+            //            var series = this.chart.series;
+            //            if (this.visible && this.chart.restIsHidden) {
+            //                for (var i = 0; i < series.length; i++) {
+            //                    if (series[i].index != seriesIndex) {
+            //                        series[i].show();
+            //                    }
+            //                }
+            //                this.chart.restIsHidden = false;
+            //            } else {
+            //                for (var i = 0; i < series.length; i++) {
+            //                    if (series[i].index != seriesIndex) {
+            //                        series[i].hide();
+            //                    }
+            //                }
+            //                this.show()
+            //                this.chart.restIsHidden = true;
+            //            }
+            //            return false;
+            //        }
+            //    }
+            //}
+        },
         tooltip: { shared: true },
-        chart: { zoomType: 'xy', borderWidth:1, borderRadius:5, borderColor:'grey'},
+        chart: { zoomType: 'xy', borderWidth:1, borderRadius:5, borderColor:'grey', panning:true, panKey:'shift'},
         title: { text: name },
         yAxis: yax,
         xAxis: { type: 'datetime', min: xmin },
         time: { timezone: 'America/New_York' },
         legend: { margin: 0, backgroundColor: 'rgba(0,0,0,0.01)'},
-        exporting: { buttons: {log: { text:'Log', onclick: function(){this.yAxis[0].update({type:'logarithmic'});} },
-                               linear: { text:'Linear', onclick: function(){this.yAxis[0].update({type:'linear'});} } } },
+        exporting: { buttons: {log: { text:'Log', onclick: function(){this.yAxis[0].update({type:'logarithmic',min:1});} },
+                               linear: { text:'Lin', onclick: function(){this.yAxis[0].update({type:'linear',min:0});} } } },
         series: series
     })
 }
@@ -88,10 +121,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         })
-        makechart('chart1','Queued States',global,min,{'attempts':attempts})
+        makechart('chart1','Queued Jobs',global,min,{'attempts':attempts})
         //makechart('chart2','Running',sites,min,'linear')
-        makechart('chart2','Running - Dedicated/Priority',sites_nonopp,min)
-        makechart('chart3','Running - Opportunistic',sites_opp,min)
+        makechart('chart2','Running Jobs - Dedicated/Priority',sites_nonopp,min)
+        makechart('chart3','Running Jobs - Opportunistic',sites_opp,min)
     })
   })
 </script>
