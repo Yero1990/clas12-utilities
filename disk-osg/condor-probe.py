@@ -286,7 +286,10 @@ def condor_match(job, args):
     return False
   if not gen_matcher.matches(job.get('generator')):
     return False
-  if not exit_matcher.matches(job.get('ExitCode')):
+  if args.noexit:
+    if job.get('ExitCode') is not None:
+      return False
+  elif not exit_matcher.matches(job.get('ExitCode')):
     return False
   if args.plot is False:
     if args.idle and job_states.get(job['JobStatus']) != 'I':
@@ -763,13 +766,14 @@ def check_xrootd(job):
 
 def get_exit_code(job):
   '''Extract the exit code from the log file'''
-  try:
-    for line in readlines_reverse(job.get('stderr'),1):
-      cols = line.strip().split()
-      if len(cols) == 2 and cols[0] == 'exit':
+  for line in readlines_reverse(job.get('stderr'),3):
+    cols = line.strip().split()
+    if len(cols) == 2 and cols[0] == 'exit':
+      try:
         return int(cols[1])
-  except:
-    return None
+      except:
+        pass
+  return None
 
 # cache generator names to only parse log once per cluster
 generators = {}
@@ -1057,6 +1061,7 @@ if __name__ == '__main__':
   cli.add_argument('-site', default=[], action='append', type=str, help='limit by site name, pattern matched (repeatable)')
   cli.add_argument('-host', default=[], action='append', type=str, help='limit by host name, pattern matched (repeatable)')
   cli.add_argument('-exit', default=[], metavar='#', action='append', type=int, help='limit by exit code (repeatable)')
+  cli.add_argument('-noexit', default=False, action='store_true', help='limit to jobs with no exit code')
   cli.add_argument('-generator', default=[], action='append', type=str, help='limit by generator name (repeatable)')
   cli.add_argument('-held', default=False, action='store_true', help='limit to jobs currently in held state')
   cli.add_argument('-idle', default=False, action='store_true', help='limit to jobs currently in idle state')
