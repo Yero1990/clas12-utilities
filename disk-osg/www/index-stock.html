@@ -12,103 +12,99 @@
 
 <script>
 
-function comparator(a,b) { return a.y-b.y; }
+const nonOppSites = ['SU-ITS','SGridGLA','CNAF','GRIF','MIT','UConn','UConn-HPC']
+const allCharts = [];
 
-function makechart(div, name, data, xmin, secondary=undefined) {
+function syncOthersAxes(axis) {
+    for (var i=0; i<allCharts.length; i++) {
+        allCharts[i].xAxis[0].setExtremes(axis.min,axis.max);
+    }
+}
+
+function toggleOthersVisibility(xyz) {
+    var seriesIndex = xyz.index;
+    var series = xyz.chart.series;
+    if (xyz.visible && xyz.chart.restIsHidden) {
+        for (var i = 0; i < series.length; i++)
+            if (series[i].index != seriesIndex) series[i].show();
+        xyz.chart.restIsHidden = false;
+    }
+    else {
+        for (var i = 0; i < series.length; i++)
+            if (series[i].index != seriesIndex) series[i].hide();
+        xyz.show();
+        xyz.chart.restIsHidden = true;
+    }
+    return false;
+}
+
+function makechart(div, title, data, xmin, secondary=undefined) {
+
+    // convert the data into serieses objects:
     series = []
-    n = 0
-    for (var label in data) {
+    var labels = Object.keys(data)
+    for (var i=0; i<labels.length; i++) {
         if (secondary == undefined) {
-            series.push({name:label, data:data[label], showInLegend:true})
+            series.push({name:labels[i], data:data[labels[i]], showInLegend:true})
         }
         else {
-            series.push({name:label, data:data[label], marker:{enabled:false}, type:'area',
-              fillColor:{ linearGradient: {x1:0,y1:0,x2:0,y2:1},
-              stops: [ [0,Highcharts.color(Highcharts.getOptions().colors[n]).setOpacity(0.4).get('rgba')],
-                       [1,Highcharts.color(Highcharts.getOptions().colors[n]).setOpacity(0).get('rgba')] ]
-              }
+            // if secondary data/axis, make the primary look fancier:
+            series.push( { name:labels[i], data:data[labels[i]], marker:{enabled:false}, type:'area',
+                fillColor:{ linearGradient: {x1:0,y1:0,x2:0,y2:1},
+                    stops: [ [0,Highcharts.color(Highcharts.getOptions().colors[i]).setOpacity(0.4).get('rgba')],
+                             [1,Highcharts.color(Highcharts.getOptions().colors[i]).setOpacity(0).get('rgba')] ]
+                }
             })
         }
-        n += 1
     }
 
-    var yax = {title: {text: '# Jobs'}, opposite:false }
+    // setup the Y axes:
+    var yAxis = { title:{text:'# Jobs'}, opposite:false }
     if (secondary != undefined) {
-        yax = [ yax,
+        yAxis = [ yAxis,
             { opposite: true, min: 0, 
-              labels : { style : { color : Highcharts.getOptions().colors[4] } },
-              title  : { text: 'Attempts' , style : { color : Highcharts.getOptions().colors[4] } }
+              labels:{ style:{ color:Highcharts.getOptions().colors[4] } },
+              title:{ text:'Attempts' , style:{ color:Highcharts.getOptions().colors[4] } }
             }
         ]
         for (var y in secondary) {
-            series.push({name:y, data:secondary[y], yAxis:1, dashStyle:'dash', showInLegend:false, marker: {enabled: false}})
+            series.push({name:y, data:secondary[y], yAxis:1, dashStyle:'dash', showInLegend:false, marker: {enabled:false}})
         }
     }
 
-    const chart = Highcharts.stockChart(div, {
+    // only show the zoom range buttons on the first plot:
+    var showRange = allCharts.length == 0;
 
-        rangeSelector: { enabled: true, floating: true, y: -30, x:-50, inputEnabled: false, title:'',
+    // kludge make all their x-axes line up:
+    var marginRight = secondary==undefined ? 46 : undefined;
+
+    const chart = Highcharts.stockChart(div, {
+        rangeSelector: { enabled:showRange, floating:true, y:-30, x:-50, inputEnabled:false, title:'', buttonSpacing:1,
             buttons: [ {type:'day',   count:1, text:'1d',   title:'View 1 day'},
                        {type:'day',   count:2, text:'2d',   title:'View 2 days'},
                        {type:'day',   count:3, text:'3d',   title:'View 3 days'},
-                       {type:'week',  count:1, text: '1w',  title: 'View 1 week'},
-                       {type:'month', count:1, text: '1m',  title: 'View 1 month'},
-                       {type: 'all',           text: 'All', title: 'View all' }
-                     ],
-            buttonSpacing: 1 
+                       {type:'week',  count:1, text:'1w',   title:'View 1 week'},
+                       {type:'month', count:1, text:'1m',   title:'View 1 month'},
+                       {type:'all',            text:'All',  title:'View all'}
+                     ]
         },
         navigator: { enabled: false},
-        scrollbar: { enabled: false, height:10},
-
-        plotOptions: { series: { lineWidth:1, step:true},
-            line: {
-                events: {
-                    legendItemClick: function() {
-                        var seriesIndex = this.index;
-                        var series = this.chart.series;
-                        if (this.visible && this.chart.restIsHidden) {
-                            for (var i = 0; i < series.length; i++) {
-                                if (series[i].index != seriesIndex) {
-                                    series[i].show();
-                                }
-                            }
-                            this.chart.restIsHidden = false;
-                        } else {
-                            for (var i = 0; i < series.length; i++) {
-                                if (series[i].index != seriesIndex) {
-                                    series[i].hide();
-                                }
-                            }
-                            this.show()
-                            this.chart.restIsHidden = true;
-                        }
-                        return false;
-                    }
-                }
-            }
-        },
-        tooltip: { padding:0, outside:true
-//, split:false, shared:true,
-            //formatter: function() {
-            //    var tmp = this.points;
-            //    tmp.sort(comparator);
-            //    txt = '';
-            //    $.each(tmp, function(i,point) {
-            //        txt += point.series.name + ': ' + point.y + '<br/> ';
-            //    });
-            //    return txt;
-            //}
-        },
-        chart: { zoomType: 'xy', borderWidth:1, borderRadius:5, borderColor:'grey', panning:true, panKey:'shift'},
-        title: { text: name },
-        yAxis: yax,
-        xAxis: { type: 'datetime', min: xmin },
-        time: { timezone: 'America/New_York' },
-        legend: { enabled: true, margin: 0, backgroundColor: 'rgba(0,0,0,0.01)'},
-        exporting: { buttons: {log: { text:'Log', onclick: function(){this.yAxis[0].update({type:'logarithmic',min:1});} },
-                               linear: { text:'Lin', onclick: function(){this.yAxis[0].update({type:'linear',min:0});} } } },
+        scrollbar: { enabled: true, height:8, showFull:false},
+        plotOptions: { series: { lineWidth:1, step:true}, line:{ events:{ legendItemClick: function() { return toggleOthersVisibility(this); } } } },
+        tooltip: { padding:0, outside:true },
+        chart: { zoomType:'x', borderWidth:1, borderRadius:5, borderColor:'grey', panning:true, panKey:'shift', marginRight:marginRight},
+        title: { text:title },
+        yAxis: yAxis,
+        xAxis: { type:'datetime', min:xmin, events:{ afterSetExtremes:function(){ syncOthersAxes(this.chart.xAxis[0]) } }, ordinal:false },
+        time: { timezone:'America/New_York' },
+        legend: { enabled:true, margin: 0, backgroundColor: 'rgba(0,0,0,0.01)'},//, layout:'vertical', align:'right', verticalAlign:'center'},
+        exporting: { buttons: {log: { text:'Log', onclick:function(){this.yAxis[0].update({type:'logarithmic',min:1});} },
+                            linear: { text:'Lin', onclick:function(){this.yAxis[0].update({type:'linear',min:0});} } } },
         series: series
     })
+
+    return chart;
+
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -117,7 +113,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const attempts = [] 
     const sites_nonopp = {}
     const sites_opp = {}
-    const nonopp = ['SU-ITS','SGridGLA','CNAF','GRIF','MIT','UConn','UConn-HPC']
     min = 999999999999999
     $.getJSON('timeline.json', function(data) {
         data => data.sort((a,b)=>a.entry.update_ts-b.entry.update_ts)
@@ -129,7 +124,7 @@ document.addEventListener('DOMContentLoaded', function() {
             for (var site in entry['sites']) {
                 if (sites[site] == undefined) sites[site] = []
                 sites[site].push( [entry.update_ts, entry['sites'][site]] )
-                if (nonopp.includes(site)) {
+                if (nonOppSites.includes(site)) {
                   if (sites_nonopp[site] == undefined) sites_nonopp[site] = []
                     sites_nonopp[site].push( [entry.update_ts, entry['sites'][site]] )
                 }
@@ -148,10 +143,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         })
-        makechart('chart1','Queued',global,min,{'attempts':attempts})
-        //makechart('chart2','Running',sites,min,'linear')
-        makechart('chart2','Running - Dedicated/Priority',sites_nonopp,min)
-        makechart('chart3','Running - Opportunistic',sites_opp,min)
+        allCharts.push(makechart('chart1','Queued',global,min,{'attempts':attempts}))
+        allCharts.push(makechart('chart2','Running - Dedicated/Priority',sites_nonopp,min))
+        allCharts.push(makechart('chart3','Running - Opportunistic',sites_opp,min))
+        syncOthersAxes(allCharts[0].xAxis[0])
     })
   })
 </script>
