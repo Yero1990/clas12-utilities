@@ -90,7 +90,7 @@ function makechart(div, title, data, xmin, secondary=undefined) {
         navigator: { enabled: false},
         scrollbar: { enabled: true, height:8, showFull:false},
         plotOptions: { series: { lineWidth:1, step:true}, line:{ events:{ legendItemClick: function() { return toggleOthersVisibility(this); } } } },
-        tooltip: { padding:0, outside:true },
+        tooltip: { padding:0, outside:true, split:false, shared:true },
         chart: { zoomType:'x', borderWidth:1, borderRadius:5, borderColor:'grey', panning:true, panKey:'shift', marginRight:marginRight},
         title: { text:title },
         yAxis: yAxis,
