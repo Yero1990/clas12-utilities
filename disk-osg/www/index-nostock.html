@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const attempts = [] 
     const sites_nonopp = {}
     const sites_opp = {}
-    const nonopp = ['SU-ITS','SGridGLA','CNAF','GRIF','MIT','UConn','UConn-HPC']
+    const nonopp = ['SU-ITS','SGridGLA','CNAF','GRIF','MIT','UConn','UConn-HPC','Lamar-Cluster']
     min = 999999999999999
     $.getJSON('timeline.json', function(data) {
         data => data.sort((a,b)=>a.entry.update_ts-b.entry.update_ts)
