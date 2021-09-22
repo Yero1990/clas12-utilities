@@ -101,7 +101,7 @@ while getopts "dvh" opt; do
 done
 
 # setup verbose/dryrun rsync options:
-rsync_opts=--stats
+rsync_opts="--stats --timeout 1800"
 if [ $verbose -ne 0 ]; then
   rsync_opts="-vv $rsync_opts"
 fi
