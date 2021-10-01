@@ -274,6 +274,8 @@ def condor_match(job, args):
     exit_matcher = Matcher(args.exit)
     gen_matcher = Matcher(args.generator)
     host_matcher = Matcher(args.host)
+  if job.get('condor') is None:
+    return False
   if not condor_matcher.matches(job.get('condor').split('.').pop(0)):
     return False
   if not gemc_matcher.matches(job.get('gemc')):
