@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
-MAILTO=baltzell@jlab.org,ungaro@jlab.org,devita@jlab.org
+MAILTO=foo@bar
 d=/group/clas12/packages/clas12-utilities/dev/disk-osg
 #
 # .---------------- minute (0 - 59)
@@ -11,8 +11,8 @@ d=/group/clas12/packages/clas12-utilities/dev/disk-osg
 # |  |  |  |  |
 # *  *  *  *  * user-name  command to be executed
 # These submit jobs:
-*/2  *  *  *  * flock -n $HOME/.submit.lock $HOME/gemcSubmitCron.sh >& $HOME/submitCron.log
-*/5  *  *  *  * flock -n $HOME/.osgpriority.lock $HOME/priorityCron.sh >& $HOME/priorityCron.log
+*/2  *  *  *  * flock -n $HOME/.submit.lock $HOME/gemcSubmitCron.sh >& $HOME/submitCron.log   >/dev/null 2>&1
+*/5  *  *  *  * flock -n $HOME/.osgpriority.lock $HOME/priorityCron.sh >& $HOME/priorityCron.log  >/dev/null 2>&1
 #
 # This transfers data from the submit node to Lustre and does cleanup:
 10   *  *  *  * flock -n ~/.osgpool.lock $d/transfer.sh || echo "ERROR:  Previous transfer cronjob still running"
