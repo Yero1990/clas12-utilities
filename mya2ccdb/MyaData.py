@@ -1,4 +1,5 @@
 import requests
+import subprocess
 from datetime import datetime
 from operator import attrgetter
 
@@ -64,45 +65,60 @@ class MyaData:
   def setEnd(self,end):
     self.end=str(end)
 
-  def get(self):
-    data=[]
-
-    # create a empty myadatum which will hold the first value from each pv
-    data.append(MyaDatum())
-    print(data[0])
-
-    for pv in self.pvs:
-      params = {
-        'b': self.start,
-        'e': self.end,
-        'c': pv.name,
-        'p': 1  # prior point
-      }
-
-      # send get request to API for specific pv/channel
-      query = requests.get(self.url, params=params)
-
-      # iterate over the data in request, add a myadatum
-      print(params['c'])
-      first = True
-      for item in query.json()['data']:
-        timestamp = item['d']
-        value = item['v']
-        md=MyaDatum(timestamp)
-        md.addPv(pv.name, value)  # could add the validation here
-
-        if first:
-          print('First!')
-          print(pv.name, timestamp, value)
-          if not data[0].datetime:
-            data[0].setTime(timestamp)
-
-          data[0].addPv(pv.name, value)
-          
-          first = False
-        else:
+  def get(self, test=True):
+    data = []
+    if test:
+      cmd=['myData','-b',self.start,'-e',self.end,'-i']
+      cmd.extend([pv.getMyaDataArg() for pv in self.pvs])
+      for line in subprocess.check_output(cmd).splitlines():
+        columns=line.strip().split()
+        if len(columns) == 2+len(self.pvs):
+          date,time=columns[0],columns[1]
+          md=MyaDatum(date,time)
+          for ii in range(2,len(columns)):
+            md.addPv(self.pvs[ii-2].name,columns[ii])
           data.append(md)
+      return data
+    else:
 
-    # first value in this list should have a data value for each pv
-    data_sorted = sorted(data, key=attrgetter('datetime'))
-    return data_sorted
+      data=[]
+
+      # create a empty myadatum which will hold the first value from each pv
+      data.append(MyaDatum())
+      print(data[0])
+      
+      for pv in self.pvs:
+        params = {
+          'b': self.start,
+          'e': self.end,
+          'c': pv.name,
+          'p': 1  # prior point
+        }
+
+        # send get request to API for specific pv/channel
+        query = requests.get(self.url, params=params)
+
+        # iterate over the data in request, add a myadatum
+        print(params['c'])
+        first = True
+        for item in query.json()['data']:
+          timestamp = item['d']
+          value = item['v']
+          md=MyaDatum(timestamp)
+          md.addPv(pv.name, value)  # could add the validation here
+
+          if first:
+            print('First!')
+            print(pv.name, timestamp, value)
+            if not data[0].datetime:
+              data[0].setTime(timestamp)
+
+            data[0].addPv(pv.name, value)
+          
+            first = False
+          else:
+            data.append(md)
+
+      # first value in this list should have a data value for each pv
+      data_sorted = sorted(data, key=attrgetter('datetime'))
+      return data_sorted
