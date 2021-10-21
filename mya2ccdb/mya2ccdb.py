@@ -28,6 +28,9 @@ cli.add_argument('start',help='start date (YYYY-MM-DD_HH:MM:SS)',type=str)
 cli.add_argument('end',help='end date (YYYY-MM-DD_HH:MM:SS)',type=str)
 cli.add_argument('-v',help='verbose mode',default=False,action='store_true')
 cli.add_argument('-i',help='ignore unknown beam energies',default=False,action='store_true')
+cli.add_argument('-l', '--legacy', 
+                 help='Use the myData program to get the data instead of API',
+                 default=False, action='store_true')
 args=cli.parse_args(sys.argv[1:])
 
 # mya date format: (Y-M-D H:M:S, with fixed widths:)
@@ -51,7 +54,7 @@ print('End:     '+args.end)
 args.start = args.start.replace('_',' ')
 args.end = args.end.replace('_',' ')
 
-myaData = MyaData(args.start,args.end)
+myaData = MyaData(args.start, args.end, args.legacy)
 myaData.addPv('B_DAQ:run_number')
 myaData.addPv('MBSY2C_energy')
 myaData.addPv('fcup_offset',2)

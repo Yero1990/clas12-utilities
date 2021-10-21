@@ -46,10 +46,11 @@ class MyaDatum:
     return s
 
 class MyaData:
-  def __init__(self,start=None,end=None):
+  def __init__(self, start=None, end=None, legacy=False):
     self.pvs=[]
     self.start='-1w'
     self.end='0'
+    self.legacy = legacy
     self.url = 'https://myaweb.acc.jlab.org/myquery/interval'
     if start is not None:
       self.start=str(start)
@@ -65,25 +66,25 @@ class MyaData:
   def setEnd(self,end):
     self.end=str(end)
 
-  def get(self, test=True):
+  def get(self):
     data = []
-    if test:
+    if self.legacy:
+      # original version that uses subprocess to call myData
       cmd=['myData','-b',self.start,'-e',self.end,'-i']
       cmd.extend([pv.getMyaDataArg() for pv in self.pvs])
       for line in subprocess.check_output(cmd).splitlines():
         columns=line.strip().split()
         if len(columns) == 2+len(self.pvs):
           date,time=columns[0],columns[1]
-          md=MyaDatum(date,time)
+          md=MyaDatum("{}T{}".format(date, time))
           for ii in range(2,len(columns)):
             md.addPv(self.pvs[ii-2].name,columns[ii])
           data.append(md)
       return data
     else:
-
-      data=[]
-
+      # use requests to call the API
       # create a empty myadatum which will hold the first value from each pv
+      data=[]
       data.append(MyaDatum())
       print(data[0])
       
@@ -108,7 +109,6 @@ class MyaData:
           md.addPv(pv.name, value)  # could add the validation here
 
           if first:
-            print('First!')
             print(pv.name, timestamp, value)
             if not data[0].datetime:
               data[0].setTime(timestamp)
