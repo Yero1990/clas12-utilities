@@ -37,8 +37,9 @@ echo >> $emailbody
 rm -f $cvmfs_cache $xrootd_cache $vacate_cache
 
 export DISPLAY=:0.0
-source /group/clas12/packages/setup.sh
-module load clas12/dev
+#source /group/clas12/packages/setup.sh
+#module load clas12/dev
+source /cvmfs/sft.cern.ch/lcg/app/releases/ROOT/6.24.06/x86_64-centos7-gcc48-opt/bin/thisroot.csh
 $dirname/condor-probe.py -completed -hours 24 -plot $plotfile >& /dev/null
 
 cat $emailbody | mail -a $plotfile -a $plotfilelogscale -s OSG-CLAS12-Daily-Digest $recipients
