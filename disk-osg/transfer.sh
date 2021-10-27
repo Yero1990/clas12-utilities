@@ -41,7 +41,7 @@
 
 # user@host that should be running this script:
 user=gemc
-localhost=scosg16
+localhost=scosg20
 
 # path on $localhost to be rsync'd to $dest:
 srcdir=/osgpool/hallb/clas12/gemc
