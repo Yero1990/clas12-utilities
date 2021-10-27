@@ -836,41 +836,31 @@ def make_timeline_entry(args):
   return data
 
 def timeline(args):
-  data = make_timeline_entry(args)
   basename = 'timeline.json'
   srcdir = os.getenv('HOME')
-  webdir = '/u/group/clas/www/clasweb-2015/html/clas12offline/osg'
+  destdir = 'dtn1902-ib:/lustre19/expphy/volatile/clas12/osg2'
   srcpath = '%s/%s'%(srcdir,basename)
-  webpath = '%s/%s'%(webdir,basename)
+  destpath = '%s/%s'%(destdir,basename)
   cache = []
   perms = stat.S_IRWXU & (stat.S_IRUSR|stat.S_IWUSR)
   perms |= stat.S_IRWXG & (stat.S_IRGRP)
   perms |= stat.S_IRWXO & (stat.S_IROTH)
-  try:
-    os.chmod(srcpath, perms)
-  except:
-    pass
+  os.chmod(srcpath, perms)
   if os.path.exists(srcpath) and os.access(srcpath, os.R_OK):
     with open(srcpath,'r') as f:
       cache = json.load(f)
-  cache.append(data)
+  cache.append(make_timeline_entry(args))
   if not os.path.exists(srcpath) or os.access(srcpath, os.W_OK):
     with open(srcpath,'w') as f:
       f.write(json.dumps(cache))
   else:
     print('Archive DNE or unwritable:  '+srcpath)
     print(json.dumps(cache,**json_format))
-  if os.access(webpath, os.W_OK):
-    shutil.copy(srcpath,webpath)
   try:
-    os.chmod(srcpath,stat.S_IRWXU&(stat.S_IRUSR))
+    ret=subprocess.check_output(['scp',srcpath,destpath])
   except:
-    pass
-  #  now = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-  #  archive = webdir+'/archive/timeline-%s.json'%now
-  #  shutil.copy(srcpath,archive)
-  #  cmd = ['find',webdir+'/archive/','-name','*.json','-ctime','+14','-delete']
-  #  subprocess.check_output(cmd)
+    print('Failed to transfer timeline.')
+  os.chmod(srcpath,stat.S_IRWXU&(stat.S_IRUSR))
 
 def tail_log(job, nlines):
   print(''.ljust(80,'#'))
@@ -1101,8 +1091,9 @@ if __name__ == '__main__':
   if args.completed and args.hours <= 0 and not args.input:
     cli.error('-completed requires -hours is greater than zero or -input.')
 
-  if socket.gethostname() != 'scosg16.jlab.org' and not args.input:
-    cli.error('You must be on scosg16 unless using the -input option.')
+  if not args.input:
+    if socket.gethostname() != 'scosg20.jlab.org' and socket.gethostname() != 'scosg16.jlab.org':
+      cli.error('You must be on scosg16 unless using the -input option.')
 
   if len(args.exit) > 0 and not args.parseexit:
     print('Enabling -parseexit to accommodate -exit.  This may be slow ....')
