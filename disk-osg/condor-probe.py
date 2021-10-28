@@ -786,14 +786,14 @@ def get_generator(job):
       job_script = os.path.dirname(os.path.dirname(job.get('UserLog')))+'/nodeScript.sh'
       for line in readlines(job_script):
         line = line.lower()
-        m = re.search('events with generator >(.*)< with options', line)
+        m = re.search('events with generator (.*) with options', line)
         if m is not None:
           if m.group(1).startswith('clas12-'):
             generators['ClusterId'] = m.group(1)[7:]
           else:
             generators['ClusterId'] = m.group(1)
           break
-        if line.find('echo LUND Event File:') == 0:
+        if line.find('echo lund event file:') == 0:
           generators['ClusterId'] = 'lund'
           break
         if line.find('gemc') == 0 and line.find('INPUT') < 0:
