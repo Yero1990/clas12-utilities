@@ -468,7 +468,7 @@ def condor_plot(args, logscale=0):
   ROOT.gStyle.SetTitleFont(42,"x")
   ROOT.gStyle.SetTitleFont(42,"y")
   ROOT.gStyle.SetTitleFont(42,"z")
-  ROOT.gStyle.SetHistLineWidth(2)
+  ROOT.gStyle.SetHistLineWidth(1)
   ROOT.gStyle.SetGridColor(15)
   ROOT.gStyle.SetPadGridX(1)
   ROOT.gStyle.SetPadGridY(1)
