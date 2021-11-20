@@ -124,7 +124,7 @@ function dateit {
 }
 
 function check_duplicates {
-  if [ "$(pgrep -c -u $user -f "rsync.*$user@$remotehost")" -eq 0 ]; then
+  if [ "$(pgrep -c -u $user -f "rsync.*$user@$remotehost.*$remotepath")" -eq 0 ]; then
       return 0
   fi
   return 1
