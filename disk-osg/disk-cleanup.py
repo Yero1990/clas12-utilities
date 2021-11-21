@@ -122,17 +122,22 @@ while True:
     # deal with files:
     for filename in filenames:
       fullfilepath = dirpath+'/'+filename
-      if should_delete_file(fullfilepath):
-        print(fullfilepath)
-        deletes.append(fullfilepath)
-        if not args.dryrun:
-          if args.gzip:
-            if not path.endswith('.gz'):
-              subprocess.run(['gzip',path])
-          else:
-            os.remove(fullfilepath)
-          delete_happened = True
-          dir_got_modified = True
+      try:
+        if should_delete_file(fullfilepath):
+          print(fullfilepath)
+          deletes.append(fullfilepath)
+          if not args.dryrun:
+            if args.gzip:
+              if not path.endswith('.gz'):
+                subprocess.run(['gzip',path])
+            else:
+              os.remove(fullfilepath)
+            delete_happened = True
+            dir_got_modified = True
+      except FileNotFoundError:
+        # this may happen if something else is deleting stuff,
+        # e.g. rsync tempfiles from incoming LUND files
+        pass
 
     # deal with directories:
     for dirname in dirnames:
