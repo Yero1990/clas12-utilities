@@ -1,7 +1,7 @@
 SHELL=/bin/bash
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 MAILTO=bobcat@bob.cat
-
+d=/group/clas12/packages/clas12-utilities/dev/disk-monitoring
 # For details see man 4 crontabs
 #
 # # Example of job definition:
@@ -12,9 +12,9 @@ MAILTO=bobcat@bob.cat
 # # |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7) OR sun,mon,tue,wed,thu,fri,sat
 # # |  |  |  |  |
 # # *  *  *  *  * user-name  command to be executed
-    5 18  *  *  * /usr/bin/flock -n /home/baltzell/.disk-cron.lock /home/baltzell/clas12/disk/free.py 0.03 || echo "ERROR:  Previs disk cronjob still running"
-    5 19  *  *  6 /usr/bin/flock -n /home/baltzell/.disk-cron.lock /home/baltzell/clas12/disk/free.py 0.05 asdf || echo "ERROR:  Previs disk cronjob still running"
-    5 21  *  *  * /usr/bin/flock -n /home/baltzell/.disk-cron.lock /home/baltzell/clas12/disk/volatile_report.sh || echo "ERROR:  Previous disk cronjob still running"
-    5 22  *  *  5 /usr/bin/flock -n /home/baltzell/.disk-cron.lock /home/baltzell/clas12/disk/report-hps.sh || echo "ERROR:  Previous disk cronjob still running"
-    5 22  *  *  6 /usr/bin/flock -n /home/baltzell/.disk-cron.lock /home/baltzell/clas12/disk/report.sh || echo "ERROR:  Previous disk cronjob still running"
+    5 18  *  *  * flock -n $HOME/.disk-cron.lock $d/free.py 0.03 || echo ERROR
+    5 19  *  *  6 flock -n $HOME/.disk-cron.lock $d/free.py 0.05 asdf || echo ERROR
+    5 21  *  *  * flock -n $HOME/.disk-cron.lock $d/volatile_report.sh || echo ERRO
+    5 22  *  *  5 flock -n $HOME/.disk-cron.lock $d/report-hps.sh || echo ERROR
+    5 22  *  *  6 flock -n $HOME/.disk-cron.lock $d/report.sh || echo ERROR
 
