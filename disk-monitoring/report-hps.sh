@@ -11,8 +11,8 @@ export PATH=/apps/bin:${PATH}
 
 limit=30
 
-outdir=`dirname $0`/hps-`date +%Y%m%d`
-mkdir $outdir
+outdir=$HOME/disk/hps-`date +%Y%m%d`
+mkdir -p $outdir
 cd $outdir
 
 TOP=/work/hallb/hps
