@@ -1,21 +1,15 @@
 #!/bin/bash
 
-# this doesn't work in a cron job, due to x-display
-#!/bin/bash -l
+DISK=/work/hallb/hps
+OUTDIR=$HOME/disk/hps-`date +%Y%m%d`
+SCRIPTDIR=`dirname $0`
+LIMIT=30
 
-# this doesn't work without a login shell, due to module command:
-#source /site/env/sysprofile
-
-# so just do this:
+# what's this for, probably perl or python?
 export PATH=/apps/bin:${PATH}
 
-limit=30
-
-outdir=$HOME/disk/hps-`date +%Y%m%d`
-mkdir -p $outdir
-cd $outdir
-
-TOP=/work/hallb/hps
+mkdir -p $OUTDIR
+cd $OUTDIR
 
 touch log
 echo "STARTING ..." >> log
@@ -23,15 +17,15 @@ date >> log
 
 rm -f hps.log hps.html data.log data.html
 
-../disk-database.pl $TOP/ hps >& hps.log
-../disk-report.pl hps $limit > hps.html
+$SCRIPTDIR/disk-database.pl $DISK/ hps >& hps.log
+$SCRIPTDIR/disk-report.pl hps $LIMIT > hps.html
 
-../disk-database.pl $TOP/data/ hpsdata >& hpsdata.log
-../disk-report.pl hpsdata $limit > hpsdata.html
+$SCRIPTDIR/disk-database.pl $DISK/data/ hpsdata >& hpsdata.log
+$SCRIPTDIR/disk-report.pl hpsdata $LIMIT > hpsdata.html
 
 rm -f du.txt du2.txt perms.txt perms2.txt
 
-du -s $TOP/* $TOP/data/* 2> perms.txt 1> du.txt
+du -s $DISK/* $DISK/data/* 2> perms.txt 1> du.txt
 
 awk -F'[‘’]' '{print$2}' ./perms.txt > perms2.txt
 

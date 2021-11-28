@@ -1,30 +1,24 @@
 #!/bin/bash
 
-# this doesn't work in a cron job, due to x-display
-#!/bin/bash -l
+DISK=/w/hallb-scifs17exp/clas/
+OUTDIR=$HOME/disk/clas-`date +%Y%m%d`
+SCRIPTDIR=`dirname $0`
+LIMIT=30
 
-# this doesn't work without a login shell, due to module command:
-#source /site/env/sysprofile
-
-# so just do this:
+# what's this for, probably perl or python?
 export PATH=/apps/bin:${PATH}
 
-limit=30
-
-outdir=$HOME/disk/clas-`date +%Y%m%d`
-mkdir -p $outdir
-cd $outdir
+mkdir -p $OUTDIR
+cd $OUTDIR
 
 touch log
 echo "STARTING ..." >> log
 date >> log
 
-d=/w/hallb-scifs17exp/clas/
+$SCRIPTDIR/disk-database.pl $DISK clas >& clas.log
+$SCRIPTDIR/disk-report.pl clas 30 > index.html
 
-../disk-database.pl $d clas >& clas.log
-../disk-report.pl clas 30 > index.html
-
-du -s $d/* 2> perms.txt 1> du.txt
+du -s $DISK/* 2> perms.txt 1> du.txt
 awk -F'[‘’]' '{print$2}' ./perms.txt > perms2.txt
 sort -r -n du.txt | awk '{printf"%12s %s\n",$1,$2}' > du2.txt
 mv -f du2.txt du.txt

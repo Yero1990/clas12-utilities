@@ -1,19 +1,15 @@
 #!/bin/bash
 
-# this doesn't work in a cron job, due to x-display
-#!/bin/bash -l
+DISK=/work/clas12
+OUTDIR=$HOME/disk/`date +%Y%m%d`
+SCRIPTDIR=`dirname $0`
+LIMIT=30
 
-# this doesn't work without a login shell, due to module command:
-#source /site/env/sysprofile
-
-# so just do this:
+# what's this for, probably perl or python?
 export PATH=/apps/bin:${PATH}
 
-limit=30
-
-outdir=$HOME/disk/`date +%Y%m%d`
-mkdir -p $outdir
-cd $outdir
+mkdir -p $OUTDIR
+cd $OUTDIR
 
 touch log
 echo "STARTING ..." >> log
@@ -21,25 +17,25 @@ date >> log
 
 for xx in rg-a rg-b rg-k rg-f rg-m users
 do
-    indir=/work/clas12
+    indir=$DISK
     if [ $xx == "users" ]
     then
-        cmd=../disk-database-users.pl
+        cmd=$SCRIPTDIR/disk-database-users.pl
     else
         indir=$indir/$xx
-        cmd=../disk-database.pl
+        cmd=$SCRIPTDIR/disk-database.pl
     fi
     rm -f $xx.log $xx.html
     $cmd $indir/ ${xx/-/} >& $xx.log
-    ../disk-report.pl ${xx/-/} $limit > $xx.html
+    $SCRIPTDIR/disk-report.pl ${xx/-/} $LIMIT > $xx.html
 done
 
 rm -f du.txt du2.txt perms.txt perms2.txt
-du -s /work/clas12/* 2> perms.txt 1> du.txt
-du -s /work/clas12/users/* 2> permsA.txt 1> duA.txt
+du -s $DISK/* 2> perms.txt 1> du.txt
+du -s $DISK/users/* 2> permsA.txt 1> duA.txt
 cat duA.txt >> du.txt
 awk -F'[‘’]' '{print$2}' ./perms.txt > perms2.txt
-df /work/clas12 > du2.txt
+df $DISK > du2.txt
 sort -r -n du.txt | awk '{printf"%12s %s\n",$1,$2}' >> du2.txt
 mv -f du2.txt du.txt
 rm -f duA.txt permsA.txt
