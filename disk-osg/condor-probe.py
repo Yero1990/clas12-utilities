@@ -558,6 +558,8 @@ def condor_plot(args, logscale=0):
   set_histos_max(h1eff_site.values())
   set_histos_max(h1ceff_site.values())
   set_histos_max(h1wall_site.values())
+  set_histos_max(h1attq_gen.values())
+  set_histos_max(h1att_gen.values())
 
   # sort sites by entries, to only plot the first N:
   max_sites = []
