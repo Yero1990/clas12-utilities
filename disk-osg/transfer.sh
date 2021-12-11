@@ -51,6 +51,9 @@ remotehost=dtn1902-ib
 remotepath=/lustre19/expphy/volatile/clas12/osg2
 dest=$user@$remotehost:$remotepath
 
+# timeout transfer if it takes longer than this many seconds: 
+rsync_timeout=5400
+
 # data files older than this will be rsync'd to $dest:
 rsync_minutes=60
 
@@ -101,7 +104,7 @@ while getopts "dvh" opt; do
 done
 
 # setup verbose/dryrun rsync options:
-rsync_opts="--stats --timeout 1800"
+rsync_opts="--stats --timeout $rsync_timeout"
 if [ $verbose -ne 0 ]; then
   rsync_opts="-vv $rsync_opts"
 fi
