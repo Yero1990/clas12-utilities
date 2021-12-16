@@ -16,7 +16,7 @@ min_event_count = 1e5
 min_evio_files_count = 5
 
 # walking back through RCDB, stop after we get this many days old:
-max_lookback_days = 5
+max_lookback_days = 10
 
 ################################################################
 
@@ -69,6 +69,8 @@ while True:
   # ignore small runs:
   if event_count is None or event_count < min_event_count:
     continue
+  if evio_files_count is None or evio_files_count < min_evio_files_count:
+    continue
 
   age_hours = (now-run_start_time).total_seconds() / 60 / 60
 
@@ -78,13 +80,13 @@ while True:
 
     if d is None:
       print('ERROR:  Run %d older than %d hours in RCDB but missing directory.'%(run.number,max_hours_to_exist))
-
-    elif evio_files_count is None or evio_files_count < min_evio_files_count:
       continue
 
-    elif age_hours > max_hours_to_complete:
-      if len(glob.glob(d+'/*')) != evio_files_count:
-        print('ERROR:  Run %d older than %d hours in RCDB but missing files.'%(run.number,max_hours_to_complete))
+    if age_hours > max_hours_to_complete and len(glob.glob(d+'/*')) < evio_files_count:
+      print('ERROR:  Run %d older than %d hours in RCDB but missing files.'%(run.number,max_hours_to_complete))
+      continue
+
+  #print('Run %d ok'%run.number)
 
   if age_hours > max_lookback_days*24:
     break
