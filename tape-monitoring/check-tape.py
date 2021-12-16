@@ -6,10 +6,10 @@ import datetime
 import argparse
 
 # if start time is older than this, it should already have a directory:
-max_hours_to_exist = 6
+max_hours_to_exist = 4
 
 # if start time is older than this, all its files should exist:
-max_hours_to_complete = 12
+max_hours_to_complete = 8
 
 # ignore runs smaller than these:
 min_event_count = 1e5
