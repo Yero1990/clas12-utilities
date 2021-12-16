@@ -9,7 +9,7 @@ import argparse
 max_hours_to_exist = 6
 
 # if start time is older than this, all its files should exist:
-max_hours_to_completion = 12
+max_hours_to_complete = 12
 
 # ignore runs smaller than these:
 min_event_count = 1e5
@@ -18,12 +18,12 @@ min_evio_files_count = 5
 # walking back through RCDB, stop after we get this many days old:
 max_lookback_days = 5
 
+################################################################
+
 cli = argparse.ArgumentParser(description='Check for missing data on tape.')
 cli.add_argument('path', help='e.g. /mss/clas12/rg-m/data')
 args = cli.parse_args(sys.argv[1:])
-
 now = datetime.datetime.now()
-
 dirs = glob.glob(args.path+'/*')
 
 def find_directory(r):
@@ -42,11 +42,16 @@ while True:
 
   run = db.get_prev_run(run)
   run_start_time = None
+  run_end_time = None
   event_count = None
   evio_files_count = None
 
   try:
     run_start_time = db.get_condition(run, 'run_start_time').value
+  except AttributeError:
+    pass
+  try:
+    run_end_time = db.get_condition(run, 'run_end_time').value
   except AttributeError:
     pass
   try:
@@ -72,14 +77,14 @@ while True:
     d = find_directory(run.number)
 
     if d is None:
-      print('ERROR:  Run Missing Run: '+str(run.number))
+      print('ERROR:  Run %d older than %d hours in RCDB but missing directory.'%(run.number,max_hours_to_exist))
 
     elif evio_files_count is None or evio_files_count < min_evio_files_count:
       continue
 
-    elif age_hours > max_hours_to_completion:
+    elif age_hours > max_hours_to_complete:
       if len(glob.glob(d+'/*')) != evio_files_count:
-        print('ERROR:  Run Missing Files:  '+str(run.number))
+        print('ERROR:  Run %d older than %d hours in RCDB but missing files.'%(run.number,max_hours_to_complete))
 
   if age_hours > max_lookback_days*24:
     break
