@@ -17,4 +17,4 @@ d=/group/clas12/packages/clas12-utilities/dev/disk-monitoring
     5 21  *  *  * flock -n $HOME/.disk-cron.lock $d/volatile_report.sh || echo ERRO
     5 22  *  *  5 flock -n $HOME/.disk-cron.lock $d/report-hps.sh || echo ERROR
     5 22  *  *  6 flock -n $HOME/.disk-cron.lock $d/report.sh || echo ERROR
-   25 */4 *  *  * flock -n $HOME/.disk-tape.lock $d/../tape-monitoring/check-tape.sh /mss/clas12/rg-m/data || echo ERROR
+   25 */4 *  *  * flock -n $HOME/.disk-tape.lock $d/../tape-monitoring/check-tape.py /mss/clas12/rg-m/data || echo ERROR
