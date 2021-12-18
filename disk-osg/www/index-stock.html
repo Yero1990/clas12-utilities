@@ -46,7 +46,12 @@ function makechart(div, title, data, xmin, secondary=undefined) {
 
     for (var i=0; i<labels.length; i++) {
         if (secondary == undefined) {
-            series.push({name:labels[i], data:data[labels[i]], showInLegend:true})
+            if (labels[i] == 'Total') {
+                series.push({name:labels[i], data:data[labels[i]], showInLegend:true, dashStyle:'dotdash'})
+            }
+            else {
+                series.push({name:labels[i], data:data[labels[i]], showInLegend:true})
+            }
         }
         else {
             // if secondary data/axis, make the primary look fancier:
@@ -109,6 +114,7 @@ function makechart(div, title, data, xmin, secondary=undefined) {
 
 document.addEventListener('DOMContentLoaded', function() {
     const global = {'idle':[],'run':[]}
+    //const sites = {}
     const attempts = [] 
     const sites_nonopp = {'Total':[]}
     const sites_opp = {'Total':[]}
@@ -126,6 +132,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             for (var site in entry['sites']) {
                 
+                //if (sites[site] == undefined) {
+                //    sites[site] = []
+                //}
+                //sites[site].push( [entry.update_ts, entry['sites'][site]] )
+
                 if (nonOppSites.includes(site)) {
                     if (sites_nonopp[site] == undefined) {
                         sites_nonopp[site] = []
@@ -146,7 +157,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     total_opp[entry.update_ts] += entry['sites'][site]
                 }
+
             }
+
             for (var g in entry['global']) {
                 if (g === 'attempts') {
                     attempts.push( [entry.update_ts, entry['global'][g]] )
