@@ -68,26 +68,32 @@ while True:
     logger.warning('Run %d ignored due to its small number of files.'%run.number)
     continue
 
-  if age_hours_start > args.e:
+  if age_hours_start < args.e:
+    logger.warning('Run %d ignored due to start time less than %.1f hours ago.'%(run.number,args.e))
+    continue
 
-    run_dir = None
-    for d in cached_dirs:
-      if os.path.isdir(d) and d.endswith(str('%.6d'%run.number)):
-        run_dir = d
-        break
+  run_dir = None
+  for d in cached_dirs:
+    if os.path.isdir(d) and d.endswith(str('%.6d'%run.number)):
+      run_dir = d
+      break
 
-    if run_dir is None:
-      logger.critical('Run %d started more than %.1f hours ago in RCDB but missing /mss directory.'%(run.number,args.e))
+  if run_dir is None:
+    logger.critical('Run %d started more than %.1f hours ago in RCDB but missing /mss directory.'%(run.number,args.e))
+    error_runs.append(run.number)
+    continue
+
+  if age_hours_end is None:
+    logger.info('Run %d ignored due to missing end time in RCDB'%run.number)
+    continue
+
+  if age_hours_end > args.c:
+    if len(glob.glob(d+'/*')) < evio_files_count:
+      logger.critical('Run %d ended more than %.1f hours ago in RCDB but missing /mss files.'%(run.number,args.c))
       error_runs.append(run.number)
       continue
-
-    if age_hours_end is not None and age_hours_end > args.c:
-      if len(glob.glob(d+'/*')) < evio_files_count:
-        logger.critical('Run %d ended more than %.1f hours ago in RCDB but missing /mss files.'%(run.number,args.c))
-        error_runs.append(run.number)
-        continue
-      else:
-        logger.info('Run %d ran from %s to %s and complete at /mss.'%(run.number,run_start_time,run_end_time))
+    else:
+      logger.info('Run %d ran from %s to %s and complete at /mss.'%(run.number,run_start_time,run_end_time))
 
   if age_hours_start > args.d*24:
     break
