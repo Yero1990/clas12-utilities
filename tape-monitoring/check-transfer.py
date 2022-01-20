@@ -61,11 +61,11 @@ while True:
     age_hours_end = None
 
   if event_count < args.n:
-    logger.warning('Run %d ignored due to its small number of events.'%run.number)
+    logger.warning('Run %d ignored due to small number of events.'%run.number)
     continue
 
   if evio_files_count < args.f:
-    logger.warning('Run %d ignored due to its small number of files.'%run.number)
+    logger.warning('Run %d ignored due to small number of files.'%run.number)
     continue
 
   if age_hours_start < args.e:
@@ -94,6 +94,9 @@ while True:
       continue
     else:
       logger.info('Run %d ran from %s to %s and complete at /mss.'%(run.number,run_start_time,run_end_time))
+
+  else:
+    logger.info('Run %d ignored due to end time less than %.1f hours ago.'%(run.number,args.c))
 
   if age_hours_start > args.d*24:
     break
