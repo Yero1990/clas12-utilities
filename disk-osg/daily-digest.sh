@@ -11,16 +11,21 @@ emailbody=$(mktemp /osgpool/hallb/clas12/gemc/daily/$timestamp\_XXXXXX.txt)
 touch $emailbody
 plotfilelogscale=${plotfile%%.*}-logscale.pdf
 
+cvmfs_cache=$HOME/cvmfs-errors.txt
+vacate_cache=$HOME/vacate-stalls.txt
+xrootd_cache=$HOME/xrootd-errors.txt
+
 function munge {
     # 1. remove username, keeping only site, host, and job ids
     # 2. sort and remove uniques, i.e. same host and job id
     # 3. count per host and sort by counts
-    sed 's/@/ /g' $1 | awk '{print$1,$(NF-1),$NF}' | sort | uniq | awk '{print$1,$2}' | sort | uniq -c | sort -n -r
+    if [ -e $1 ]
+    then
+        sed 's/@/ /g' $1 | awk '{print$1,$(NF-1),$NF}' | sort | uniq | awk '{print$1,$2}' | sort | uniq -c | sort -n -r
+    else
+        echo "!!!!!!!!!!!!! Nonexestent file: $1"
+    fi
 }
-
-cvmfs_cache=$HOME/cvmfs-errors.txt
-vacate_cache=$HOME/vacate-stalls.txt
-xrootd_cache=$HOME/xrootd-errors.txt
 
 echo Nodes with CVMFS issues in the past 24 hours: >> $emailbody
 munge $cvmfs_cache >> $emailbody
