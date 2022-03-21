@@ -22,8 +22,6 @@ function munge {
     if [ -e $1 ]
     then
         sed 's/@/ /g' $1 | awk '{print$1,$(NF-1),$NF}' | sort | uniq | awk '{print$1,$2}' | sort | uniq -c | sort -n -r
-    else
-        echo "!!!!!!!!!!!!! Nonexestent file: $1"
     fi
 }
 
