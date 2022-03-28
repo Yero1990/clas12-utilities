@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import math
+import atexit
 import argparse
 import subprocess
 
@@ -17,9 +18,9 @@ cli = argparse.ArgumentParser(description='''Utility for filesystem cleanup.
   Note, this preserves directory modification times, unlike a `find -delete.`
   ''')
 cli.add_argument('-path', required=True, type=str, help='path to search recursively for deletions')
-cli.add_argument('-delete', default=-1, metavar='#', type=int, help='age threshold in days for file deletion (default=infinity)')
-cli.add_argument('-empty', default=-1, metavar='#', type=int, help='age threshold in days for empty directory deletion (default=infinity)')
-cli.add_argument('-trash', default=-1, metavar='#', type=int, help='age threshold in days for trash deletion (default=infinity)')
+cli.add_argument('-delete', default=-1, metavar='#', type=int, help='age threshold in days for file deletion (default=inf)')
+cli.add_argument('-empty', default=-1, metavar='#', type=int, help='age threshold in days for empty directory deletion (default=inf)')
+cli.add_argument('-trash', default=-1, metavar='#', type=int, help='age threshold in days for trash deletion (default=inf)')
 cli.add_argument('-gzip', default=False, action='store_true', help='gzip files instead of deleting')
 cli.add_argument('-ignores', default=[], type=str, action='append', help='regular expressions of paths to ignore, repeatable (default=%s)'%default_ignores)
 cli.add_argument('-trashes', default=[], type=str, action='append', help='regular expressions of file basenames to always delete, repeatable (default=%s)'%default_trashes)
@@ -51,6 +52,15 @@ if len(args.ignores)==0:
 
 if args.noignores:
   args.ignores = []
+
+########################################################################
+########################################################################
+
+def cleanup(dryrun,deletes):
+  if dryrun:
+    print('\nWould have deleted %d things.'%len(deletes))
+  else:
+    print('\nDeleted %d things.'%len(deletes))
 
 ########################################################################
 ########################################################################
@@ -102,6 +112,8 @@ def should_delete_dir(path):
 
 deletes = []
 cycles = 0
+
+atexit.register(cleanup, dryrun=args.dryrun, deletes=deletes)
 
 while True:
 
@@ -163,8 +175,5 @@ while True:
     cycles += 1
     print('Cycle #%d to find empty directories ...'%(cycles+1))
 
-if args.dryrun:
-  print('Would have deleted %d things.'%len(deletes))
-else:
-  print('Deleted %d things.'%len(deletes))
+cleanup(args.dryrun,deletes)
 
