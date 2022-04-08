@@ -20,16 +20,17 @@ args = cli.parse_args(sys.argv[1:])
 class CCDBRange():
   # Could use ccdb.Assignment instead, but did not want
   # to mess with all the sqlalchemy stuff
-  def __init__(self,run_min,run_max,id,comment):
+  def __init__(self,run_min,run_max,id,created,comment):
     self.run_min = run_min
     self.run_max = run_max
     self.id = id
+    self.created = created
     self.comment = comment.strip().strip('"')
   @staticmethod
   def header():
-    return '%6s %6s %7s %s'%('min','max','id','comment')
+    return '%6s %6s %7s  %19s  %s'%('min','max','id','created','comment')
   def __str__(self):
-    return '%6d %6d %7d %s'%(self.run_min,self.run_max,self.id,self.comment)
+    return '%6d %6d %7d  %19s  %s'%(self.run_min,self.run_max,self.id,self.created,self.comment)
 
 provider = ccdb.AlchemyProvider()
 provider.connect(os.getenv('CCDB_CONNECTION'))
@@ -39,7 +40,7 @@ ranges = []
 for run in range(args.min,args.max+1):
   assignment = provider.get_assignment(args.table,run,args.variation)
   if len(ranges)==0 or ranges[-1].id != assignment.id:
-    ranges.append(CCDBRange(run,run,assignment.id,assignment.comment))
+    ranges.append(CCDBRange(run,run,assignment.id,assignment.created,assignment.comment))
   elif ranges[-1].run_max == run-1:
     ranges[-1].run_max = run
   else:
