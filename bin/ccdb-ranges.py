@@ -1,8 +1,34 @@
 #!/usr/bin/env python2
 import os
 import sys
-import ccdb
 import argparse
+import datetime
+import ccdb
+import sqlalchemy
+
+info='''Sometimes you want to know what CCDB assignments you will get for
+a given run range.  But often that isn't simple to figure out from
+standard CCDB tools, as it depends on the timestamp, variation and
+its mothers, and the time at which different assignments were made.
+This script determines those \"effective\" run ranges, i.e., what
+you would actually get for a given timestamp and variation.
+
+The simplest example:
+(1) An assignment A is made covering runs 1-100.
+(2) Later an assignment B is made covering runs 50-60.
+(3) There are now 2 assignments but 3 effective run ranges:
+    1-49, 50-60, and 61-100, two of which correspond to A.
+
+Note, this type of "introspection" was one of the things intended
+for future CCDB versions.
+
+This script also provides a \"save\" option, which will export the
+effective ranges to files that can then be modified and uploaded
+to CCDB.  If needing to correct a few numbers in CCDB, across a
+range of runs and multiple assignments, this can be much easier
+and more robust than manually tracing timestamp/variation effects
+and avoids having to find the original files or regenerate them.
+'''
 
 class Range():
     def __init__(self, run_min, run_max, assignment):
@@ -17,10 +43,7 @@ class Range():
         return '%6d %6d %7d  %19s  %s' % (self.run_min, self.run_max,
             self.assignment.id, self.assignment.created, self.assignment.comment)
     def table_string(self):
-        rows = []
-        for row in self.assignment.constant_set.data_table:
-            rows.append(' '.join(row))
-        return '\n'.join(rows)
+        return '\n'.join([ ' '.join(row) for row in self.assignment.constant_set.data_table ])
     def generate_filename(self):
         path = '-'.join(self.assignment.constant_set.type_table.path.strip('/').split('/'))
         return '%s_%d-%d.txt' % (path, self.run_min, self.run_max)
@@ -32,7 +55,7 @@ class Range():
         if os.path.exists(self.filename):
             print('ERROR:  File already exists:  '+self.filename)
             print('ABORTED.')
-            sys.exit()
+            sys.exit(1)
         print('Writing file:  '+self.filename)
         with open(self.filename,'w') as f:
             if comment is not None:
@@ -45,23 +68,52 @@ class Range():
         return ret
 
 cli = argparse.ArgumentParser(description='Generate effective run ranges for a given CCDB table.',
-    epilog='For example:  ccdb-ranges.py -min 4900 -max 5010 -table /runcontrol/fcup')
+    epilog='For example:  ccdb-ranges.py -min 4090 -max 5010 -table /runcontrol/fcup')
+
+cli.add_argument('-info', help='print some information about this script', default=False, action='store_true')
 cli.add_argument('-min', metavar='#', help='minimum run number', type=int, required=True)
 cli.add_argument('-max', metavar='#', help='maximum run number', type=int, required=True)
 cli.add_argument('-table', help='table name', type=str, required=True)
-cli.add_argument('-variation', help='variation name (default=default)', type=str, required=False, default='default')
-cli.add_argument('-dump', help='print all constant sets', required=False, default=False, action='store_true')
-cli.add_argument('-save', help='save all constant sets in files in current working directory', required=False, default=False, action='store_true')
-cli.add_argument('-comment', help='add a comment to the save files', type=str, required=False)
+cli.add_argument('-variation', help='variation name (default=default)', type=str, default='default')
+cli.add_argument('-timestamp', metavar='MM/DD/YYYY[-HH:mm:ss]', help='timestamp (default=now)', type=str, default=None)
+cli.add_argument('-dump', help='print all constant sets', default=False, action='store_true')
+cli.add_argument('-save', help='save all constant sets in files in current working directory', default=False, action='store_true')
+cli.add_argument('-comment', help='add a comment for CCDB to the saved files', type=str)
 
 args = cli.parse_args(sys.argv[1:])
 
-ranges = []
+if args.info:
+    print('\n'+''.ljust(66,"#"))
+    print(cli.description+'\n\n'+info)
+    print(''.ljust(66,"#")+'\n')
+    sys.exit(0)
+
+if args.max < args.min:
+    cli.error('Invalid run range, min>max:  min=%d  max=%d.' % (args.min, args.max))
+
+if args.timestamp is not None:
+    try:
+        args.timestamp = datetime.datetime.strptime(args.timestamp, '%m/%d/%Y-%H:%M:%s')
+    except ValueError:
+        try:
+            args.timestamp = datetime.datetime.strptime(args.timestamp, '%m/%d/%Y')
+        except ValueError:
+            cli.error('Invalid timestamp:  '+args.timestamp)
+
 provider = ccdb.AlchemyProvider()
 provider.connect(os.getenv('CCDB_CONNECTION'))
 
+ranges = []
+
 for run in range(args.min, args.max+1):
-    assignment = provider.get_assignment(args.table, run, args.variation)
+    try:
+        assignment = provider.get_assignment(args.table, run, args.variation, args.timestamp)
+    except ccdb.errors.TypeTableNotFound:
+        cli.error('Invalid table or variation:  %s/%s.' % (args.table, args.variation))
+    except ccdb.errors.DirectoryNotFound:
+        cli.error('Invalid table or variation:  table=%s  variation=%s.' % (args.table, args.variation))
+    except sqlalchemy.orm.exc.NoResultFound:
+        cli.error('Invalid run range or no data:  min=%d  max=%d.' % (args.min, args.max))
     if len(ranges)==0 or ranges[-1].assignment.id != assignment.id:
         ranges.append( Range(run, run, assignment) )
     elif ranges[-1].run_max == run-1:
@@ -69,7 +121,7 @@ for run in range(args.min, args.max+1):
     else:
         raise Exception('This should be impossible.')
 
-print('Effective Run Ranges ::::::::::::::::::::::::::::::')
+print('\nEffective Run Ranges ::::::::::::::::::::::::::::::')
 print(Range.header()+'\n'+'\n'.join([str(r) for r in ranges]))
 print(':::::::::::::::::::::::::::::::::::::::::::::::::::\n')
 
