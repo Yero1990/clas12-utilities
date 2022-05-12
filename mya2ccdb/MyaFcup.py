@@ -41,11 +41,11 @@ class MyaFcup:
       self.run = int(myaDatum.getValue('B_DAQ:run_number'))
       if self.run > _RUN_NUMBER_MAX:
         self.run=None
-    except ValueError:
+    except (TypeError, ValueError) as err:
       self.run = None
     try:
       self.energy = float(myaDatum.getValue('MBSY2C_energy'))
-    except ValueError:
+    except (TypeError, ValueError) as err:
       self.energy = None
     try:
       # convert to -1/0/+1=IN/UDF/OUT scheme:
@@ -53,22 +53,23 @@ class MyaFcup:
       if   self.hwp == 1: self.hwp = -1
       elif self.hwp == 0: self.hwp = 1
       else:               self.hwp = 0
-    except ValueError:
+    except (TypeError, ValueError) as err:
       self.hwp = None
     try:
       self.offset = float(myaDatum.getValue('fcup_offset'))
-    except ValueError:
+    except (TypeError, ValueError) as err:
       self.offset = None
     try:
       self.slm_offset = float(myaDatum.getValue('slm_offset'))
-    except ValueError:
+    except (TypeError, ValueError) as err:
       self.slm_offset = None
     try:
       self.stopper = float(myaDatum.getValue('beam_stop'))
-    except ValueError:
+    except (TypeError, ValueError) as err:
       self.stopper = None
     self.energy = self.correctEnergy()
     self.atten = self.getAttenuation()
+
   def correctEnergy(self):
     if self.energy is not None:
       for runRange,energy in _OVERRIDE_ENERGY.items():

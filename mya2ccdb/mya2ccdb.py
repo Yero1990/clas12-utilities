@@ -28,6 +28,9 @@ cli.add_argument('start',help='start date (YYYY-MM-DD_HH:MM:SS)',type=str)
 cli.add_argument('end',help='end date (YYYY-MM-DD_HH:MM:SS)',type=str)
 cli.add_argument('-v',help='verbose mode',default=False,action='store_true')
 cli.add_argument('-i',help='ignore unknown beam energies',default=False,action='store_true')
+cli.add_argument('-l', '--legacy', 
+                 help='Use the myData program to get the data instead of API',
+                 default=False, action='store_true')
 args=cli.parse_args(sys.argv[1:])
 
 # mya date format: (Y-M-D H:M:S, with fixed widths:)
@@ -51,7 +54,7 @@ print('End:     '+args.end)
 args.start = args.start.replace('_',' ')
 args.end = args.end.replace('_',' ')
 
-myaData = MyaData(args.start,args.end)
+myaData = MyaData(args.start, args.end, args.legacy)
 myaData.addPv('B_DAQ:run_number')
 myaData.addPv('MBSY2C_energy')
 myaData.addPv('fcup_offset',2)
@@ -74,14 +77,6 @@ for myaDatum in myaData.get():
   current = MyaFcup(myaDatum)
 
   # if data invalid, assume it's the same as the previous:
-  if current.atten is None:
-    if current.stopper is not None:
-      if previous is not None and args.i:
-        current.energy = previous.energy
-      else:
-        badEnergies.add((current.run,current.energy))
-    if previous is not None:
-      current.atten = previous.atten
   if previous is not None:
     if current.run is None:
       current.run = previous.run
@@ -91,6 +86,12 @@ for myaDatum in myaData.get():
       current.slm_offset = previous.slm_offset
     if current.offset is None:
       current.offset = previous.offset
+    if current.energy is None:
+      current.energy = previous.energy
+    if current.stopper is None:
+      current.stopper = previous.stopper
+    if current.atten is None:
+      current.atten = previous.atten
 
   # for HWP, only check if run number changed:
   if previous is None or current.run != previous.run:
