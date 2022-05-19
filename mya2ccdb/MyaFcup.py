@@ -13,18 +13,66 @@ _RUN_NUMBER_MAX=2E5
 # available and so the archived PV for attenuation is sometimes
 # inaccurate.
 
+
 _ATTEN={}
-_ATTEN[10604]= 9.8088
-_ATTEN[10409]= 9.6930
-_ATTEN[10405]= 9.6930  # unmeasured during BONuS, copied from 10409
-_ATTEN[10375]= 9.6930  # bogus beam energy from ACC during BONuS
-_ATTEN[10339]= 9.6930  # unmeasured during BONuS, copied from 10409
-_ATTEN[10389]= 9.6930  # unmeasured during BONuS, copied from 10409
-_ATTEN[10197]= 9.6930  # bogus beam energy from ACC, actually 10339
-_ATTEN[10200]= 9.96025
-_ATTEN[ 7546]=14.89565
-_ATTEN[ 6535]=16.283
-_ATTEN[ 6423]=16.9726
+# I noticed some of the run times in the clas12mon.jlab.org/runs/summaries were inconsistent with the run time of PV B_DAQ:run_number
+# (for example, see run 15042, where in clas12mon is says: 11:02:53 - 11:19:40. whereas in B_DAQ_run_number it run time keeps going until ~17:32:18 .   Will use the run range times in clas12mon for now.
+# TO run this code, I will need to run each target separately, since the code only supports attenuation of a given beam energy and target
+# so will have to uncomment ONLY one: _ATTEN[beam_energy]=att_factor below, for a particular target, and run the mya2ccdb.py code
+
+# ------CY May 19 : Added rgm attenuation factors             ~   start_time(1st run)   end _time(last run)
+# 6 GeV 
+_ATTEN[5986]=15.3412   # Run range: 15016-15042, Eb=6 GeV, LH2    2021-11-10_18:15:38   2021-11-12_11:19:40
+_ATTEN[5986]=15.022    # Run range: 15043-15106, Eb=6 GeV, LD2    2021-11-12_17:45:21   2021-11-18_10:37:53
+_ATTEN[5986]=14.8788   # Run range: 15108-15164, Eb=6 GeV, LHe4   2021-11-18_17:57:19   2021-11-23_05:24:50
+_ATTEN[5986]=15.95795  # Run range: 15165-15177, Eb=6 GeV, Empty  2021-11-23_05:49:35   2021-11-23_19:04:56
+_ATTEN[5986]=12.017    # Run range: 15178-15317, Eb=6 GeV, C(x4)  2021-11-25_01:24:37   2021-12-05_08:04:44
+_ATTEN[5986]=8.183     # Run range: 15318-15328, Eb=6 GeV, Sn     2021-12-05_08:33:38   2021-12-06_07:50:47
+_ATTEN[5986]=9.5178    # Run range: 15355-15389, Eb=6 GeV, 48Ca   2021-12-06_20:02:11   2021-12-10_07:30:18
+_ATTEN[5986]=12.6204   # Run range: 15390-15432, Eb=6 GeV, 40Ca   2021-12-10_17:23:13   2021-12-14_07:35:07
+_ATTEN[5986]=14.1515   # Run range: 15433-15456, Eb=6 GeV, LD2    2021-12-14_14:22:22   2021-12-17_07:30:42
+_ATTEN[5986]=13.9358   # Run range: 15458-15490, Eb=6 GeV, LHe4   2021-12-17_11:33:01   2021-12-21_07:19:07
+
+# ------CY May 19 : Added rgm attenuation factors             ~   start_time(1st run)   end _time(last run)
+# 2.1 GeV
+_ATTEN[2070]=1.00000   # Run range: 15533-15565, Eb=2.1 GeV, LH2    2022-01-09_18:00:04   2022-01-13_08:01:42
+_ATTEN[2070]=1.00000   # Run range: 15566-15627, Eb=2.1 GeV, LD2    2022-01-13_12:28:32   2022-01-16_17:57:42
+_ATTEN[2070]=1.00000   # Run range: 15628-15636, Eb=2.1 GeV, LH2    2022-01-16_23:16:03   2022-01-17_11:27:56
+_ATTEN[2070]=23.3452   # Run range: 15637-15642, Eb=2.1 GeV, Empty  2022-01-17_14:04:29   2022-01-18_13:26:35
+_ATTEN[2070]=1.00000   # Run range: 15643-15670, Eb=2.1 GeV, C      2022-01-18_23:43:07   2022-01-20_20:28:08
+_ATTEN[2070]=1.00000   # Run range: 15671-15725, Eb=2.1 GeV, LAr    2022-01-20_20:32:28   2022-01-24_07:19:16
+
+# ------CY May 19 : Added rgm attenuation factors             ~   start_time(1st run)   end _time(last run)
+# 4 GeV,  15726, 15727 rcdb has beam energy 2 GeV still, so I excluded those. Also, from attenuation factors table this
+# range has no attenuation factor, so I put in 16.40835, presumably since the other Empty runs in @ this energy have that attenuation
+_ATTEN[4029]=16.40835  # Run range: 15728-15732, Eb=4 GeV, Empty  2022-01-24_11:31:11  2022-01-24_12:15:05
+_ATTEN[4029]=11.6961   # Run range: 15733,       Eb=4 GeV, C      2022-01-24_17:09:54  2022-01-24_18:15:47
+_ATTEN[4029]=4.2662    # Run range: 15734,       Eb=4 GeV, LAr    2022-01-24_18:23:22  2022-01-24_22:20:02
+_ATTEN[4029]=16.40835  # Run range: 15735-15738, Eb=4 GeV, Empty  2022-01-25_18:00:16  2022-01-25_18:28:45
+_ATTEN[4029]=4.2662    # Run range: 15739-15765, Eb=4 GeV, LAr    2022-01-27_14:19:02  2022-01-29_22:30:17
+_ATTEN[4029]=11.6961   # Run range: 15766-15775, Eb=4 GeV, C      2022-01-29_22:42:08  2022-01-30_13:30:35
+_ATTEN[4029]=16.40835  # Run range: 15777,       Eb=4 GeV, Empty  2022-01-30_16:06:04  2022-01-30_18:04:04
+_ATTEN[4029]=11.6961   # Run range: 15778-15784, Eb=4 GeV, C      2022-01-30_18:10:51  2022-01-31_08:22:00
+
+# ------CY May 19 : Added rgm attenuation factors             ~   start_time(1st run)   end _time(last run)
+# 6 GeV, (more precisely. 5986.36 MeV)
+_ATTEN[4029]=15.95795  # Run range: 15787-15788, Eb=6 GeV, Empty  2022-01-31_15:16:26   2022-01-31_15:46:50
+_ATTEN[4029]=1.000000  # Run range: 15789-15802, Eb=6 GeV, LAr    2022-01-31_15:49:30   2022-02-01_19:58:52
+_ATTEN[4029]=15.95795  # Run range: 15803,       Eb=6 GeV, Empty  2022-02-01_20:28:52   2022-02-01_21:28:59
+_ATTEN[4029]=10.1932   # Run range: 15804-15827, Eb=6 GeV, Sn     2022-02-01_22:02:25   2022-02-03_07:30:43
+_ATTEN[4029]=11.5568   # Run range: 15829-15884, Eb=6 GeV, 48Ca   2022-02-03_17:47:17   2022-02-08 06:00:55    # this is the "good clean" Calcium-48
+
+#_ATTEN[10604]= 9.8088
+#_ATTEN[10409]= 9.6930
+#_ATTEN[10405]= 9.6930  # unmeasured during BONuS, copied from 10409
+#_ATTEN[10375]= 9.6930  # bogus beam energy from ACC during BONuS
+#_ATTEN[10339]= 9.6930  # unmeasured during BONuS, copied from 10409
+#_ATTEN[10389]= 9.6930  # unmeasured during BONuS, copied from 10409
+#_ATTEN[10197]= 9.6930  # bogus beam energy from ACC, actually 10339
+#_ATTEN[10200]= 9.96025
+#_ATTEN[ 7546]=14.89565
+#_ATTEN[ 6535]=16.283
+#_ATTEN[ 6423]=16.9726
 
 _OVERRIDE_ENERGY={
     RunRange(12444,12853,None):10405
