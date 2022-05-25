@@ -67,7 +67,7 @@ _ATTEN={}
 #                                                                                                    "run 15108 was still going: 11-18 17:57-19:06"
 #                                                                                                     "beam_blocker OUT (dip)  : 11-18 18:52-19:05 " 
 #                                                                                  mya2ccdb.py did NOT picked up this change since the run was already on-going(see rgm_15108_15164/output.txt )
-#                                                                                  but adjacent runs DO HAVE beam_blocker IN (so I guess this is OK ??) 
+#                                                                                  but adjacent runs DO HAVE beam_blocker IN | lumi scan specialized run, SO WILL never be part of production data | PASSED
 #
 #_ATTEN[5986]=15.95795  # Run range: 15165-15177, Eb=6 GeV, Empty  2021-11-23_05:49:35   2021-11-23_19:04:56      65.732                          # mya2ccdb.py runs fine 
 #                                                                                                "beam blocker IN for entire duration" | PASSED
@@ -87,7 +87,7 @@ _ATTEN={}
 #                                                                                  "during dip 2: run 15356 (lumi scan run) was still going: 12-07 00:59 - 2:31"
 #                                                                                                                                    "dip 2: 12-07 02:19 - 2:31"
 #                                                                                mya2ccdb.py did NOT picked up this change since the run was already on-going(see rgm_15355_15389/output.txt )
-#                                                                                but adjacent runs DO HAVE beam_blocker IN (so I guess this is OK ??)
+#                                                                                but adjacent runs DO HAVE beam_blocker IN | lumi scan specialized run, SO WILL never be part of production data | PASSED
 #
 #_ATTEN[5986]=12.6204   # Run range: 15390-15432, Eb=6 GeV, 40Ca   2021-12-10_17:23:13   2021-12-14_07:35:07     65.732                             # mya2ccdb.py runs fine 
 #                                                                                                   beam blocker OUT twice (2 small dips to -0.1)
@@ -99,14 +99,14 @@ _ATTEN={}
 #                                                                                               "run 15434 was still going: 12-15 1:20-2:00"
 #                                                                                               "beam blocker OUT (dip)   : 12-15 1:45-1:56 " 
 #                                                                          mya2ccdb.py did NOT picked up this change since the run was already on-going(see rgm_15433_15456/output.txt )
-#                                                                                  but adjacent runs DO HAVE beam_stopper IN (so I guess this is OK ??)
+#                                                                                  but adjacent runs DO HAVE beam_stopper IN | run 15434 is a beam blocker calibration run SO WILL never be part of production | PASSED
 #
 #_ATTEN[5986]=13.9358   # Run range: 15458-15490, Eb=6 GeV, LHe4   2021-12-17_11:33:01   2021-12-21_07:19:07         65.732                       # mya2ccdb.py runs fine 
 #                                                                                                    beam blocker OUT (small dip to -0.1)     
 #                                                                                                 run 15458 was still on-going: 12-17 11:33 - 12:00       
 #                                                                                                            beam blocker OUT : 12-17 11:47 - 11:58
 #                                                                   mya2ccdb.py did NOT picked up this change since the run was already on-going(see rgm_15458_15490/output.txt )
-#                                                                                  but adjacent runs DO HAVE beam_stopper IN (so I guess this is OK ??)
+#                                                                                  but adjacent runs DO HAVE beam_stopper IN | run 15458 is a beam blocker calibration run SO WILL never be part of production | PASSED
 #
 
 # ------CY May 19 : Added rgm attenuation factors             ~   start_time(1st run)   end _time(last run)     Mya_beam_stop  
@@ -140,12 +140,12 @@ _ATTEN={}
 
 #_ATTEN[4029]=11.6961   # Run range: 15733,       Eb=4 GeV, C      2022-01-24_17:09:54  2022-01-24_18:15:47      53->-0.1 (@ 18:00)             # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range
 #                                                                                                 run 15733 was still on-going: 17:09 - 18:15
-#                                                                                                           "beam blocker OUT : 18:00 - 18:14" 
-#                                                                                                     "need to fix bug before this run can be checked"
+#                                                                                                           "beam blocker OUT : 18:00 - 18:14"| run 15733 is a beam blocker calibration run SO WILL never be part of production | PASSED
+#                                                                                                  
 
 #_ATTEN[4029]=4.2662    # Run range: 15734,       Eb=4 GeV, LAr    2022-01-24_18:23:22  2022-01-24_22:20:02      53                            # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range
 #                                                                                                    beam blocker IN  
-#                                                                                     "need to fix bug before this run can be checked"
+#                                                                                     "need to fix bug before this run can be checked" | 15734 IS A JUNK RUN | PASSED
 
 #_ATTEN[4029]=16.40835  # Run range: 15735-15738, Eb=4 GeV, Empty  2022-01-25_18:00:16  2022-01-25_18:28:45      53                            # mya2ccdb.py runs fine
 #                                                                                                         beam blocker IN | PASSED 
@@ -156,13 +156,13 @@ _ATTEN={}
 #                                                                                         mya2ccdb reported:   "beam blocker OUT: 15743-15765"
 #                                                                               from MyaPlot, the beam blocker was taken OUT during run 15742 and put IN
 #                                                                                during run 15765, but since the runs were on-going, mya2ccdb.py did not
-#                                                                                 pickup the parameter change until the next run. (maybe this is OK ??)
+#                                                                                 pickup the parameter change until the next run. | run 15742 is beam blocker calibration | run 15765 is JUNK RUN | PASSED
 
 #_ATTEN[4029]=11.6961   # Run range: 15766-15775, Eb=4 GeV, C      2022-01-29_22:42:08  2022-01-30_13:30:35      53                            # mya2ccdb.py runs fine
 #                                                                                                          beam blocker IN   | PASSED
 
 #_ATTEN[4029]=16.40835  # Run range: 15777,       Eb=4 GeV, Empty  2022-01-30_16:06:04  2022-01-30_18:04:04      53                            # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range
-#                                                                                                          beam blocker IN   | need to fix bug first
+#                                                                                                          beam blocker IN   | need to fix bug first, but PASSED
 
 #_ATTEN[4029]=11.6961   # Run range: 15778-15784, Eb=4 GeV, C      2022-01-30_18:10:51  2022-01-31_08:22:00      53                            # mya2ccdb.py runs fine
 #                                                                                                          beam blocker IN   | PASSED
@@ -174,26 +174,26 @@ _ATTEN={}
 #                                                                                                                53->-0.1 (@15:40)   
 #                                                                                      "beam blocker was put IN and taken OUT while run 15788 was on-going" 
 #                                                                                       mya2ccdb.py did NOT pick up this change, as it ocurred during a run
-#                                                                                       so, mya2ccdb.py output was beam block OUT during 15787-15788
-#                                                                                        (maybe this is OK ??)        
+#                                                                                       so, mya2ccdb.py output was beam block OUT during 15787-15788 | RUN 15788 was a daq test run | PASSED
+#                                                                                          
 
 #_ATTEN[5986]=-999  # Run range: 15789-15802, Eb=6 GeV, LAr    2022-01-31_15:49:30   2022-02-01_19:58:52     -0.1                                # mya2ccdb.py runs fine
 #                                                                                                          beam blocker OUT   | PASSED
 
 #_ATTEN[5986]=15.95795  # Run range: 15803,       Eb=6 GeV, Empty  2022-02-01_20:28:52   2022-02-01_21:28:59      53                           # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range            
-#                                                                                                          beam blocker IN   | need to fix bug first
+#                                                                                                          beam blocker IN   | need to fix bug first, but PASSED
 
 #_ATTEN[5986]=10.1932   # Run range: 15804-15827, Eb=6 GeV, Sn     2022-02-01_22:02:25   2022-02-03_07:30:43      53                           # mya2ccdb.py runs fine
 #                                                                                                       beam blocker OUT twice (2 dips) 
-#                                                                                                   run 15804: 02-01 22:02 - 22:26
+#                                                                                                   run 15804: 02-01 22:02 - 22:26   ( was beam blocker calibration run )
 #                                                                                                       dip 1: 02-01 22:12 - 22:30
 #                                                                                                   next run 15805 started @ 22:38, so beam blocker was already IN
 #                                                                                                   run 15817: 02-02 11:30 - 11:49 (junK run)
 #                                                                                                       dip 2: 02-02 11:39 - 11:47         
 #                                                                                                 beam blocker taken OUT/ put back IN  
 #                                                                                            during run 15804 and 15817, so mya2ccdb did not
-#                                                                               pickup any changes in the beam blocker status, and reported beam blocker IN  
-#                                                                                        (maybe this is OK ??)        
+#                                                                               pickup any changes in the beam blocker status, but these runs were calibration and junk, so | PASSED
+#                                                                                        
 
 #_ATTEN[5986]=11.5568   # Run range: 15829-15884, Eb=6 GeV, 48Ca   2022-02-03_17:47:17   2022-02-08_06:00:55    53                             # mya2ccdb.py runs fine
 #                                                                                                             (small dip to -0.1)
