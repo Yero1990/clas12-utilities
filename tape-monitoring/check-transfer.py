@@ -15,6 +15,7 @@ cli.add_argument('-e', metavar='#', help='minimum hours since run start time for
 cli.add_argument('-c', metavar='#', help='minimum hours since run end time for completion', type=float, default=8)
 cli.add_argument('-n', metavar='#', help='mininum number of events per run', type=int, default=1e5)
 cli.add_argument('-f', metavar='#', help='minimum number of files per run', type=int, default=5)
+cli.add_argument('-m', metavar='#', help='minimum run number to consider', type=int, default=0)
 cli.add_argument('-d', metavar='#', help='number of days to look back in RCDB', type=float, default=5)
 cli.add_argument('-r', metavar='URL', help='RCDB database connection string', type=str, default='mysql://rcdb@clasdb.jlab.org/rcdb')
 cli.add_argument('-v', help='verbose mode, else only print failures', default=False, action='store_true')
@@ -45,12 +46,18 @@ while True:
   run = db.get_prev_run(run)
 
   try:
-    run_start_time = db.get_condition(run, 'run_start_time').value
-    age_hours_start = (datetime.datetime.now() - run_start_time).total_seconds() / 60 / 60
-    event_count = db.get_condition(run, 'event_count').value
-    evio_files_count = db.get_condition(run, 'evio_files_count').value
-  except AttributeError:
-    logger.warning('Run %d ignored due to its missing RCDB parameters.'%run.number)
+    try:
+      run_start_time = db.get_condition(run, 'run_start_time').value
+      age_hours_start = (datetime.datetime.now() - run_start_time).total_seconds() / 60 / 60
+      event_count = db.get_condition(run, 'event_count').value
+      evio_files_count = db.get_condition(run, 'evio_files_count').value
+    except (AttributeError,TypeError):
+      logger.warning('Run %d ignored due to its invalid RCDB parameters.'%run.number)
+      continue
+    if run.number < args.m:
+      break
+  except (AttributeError,TypeError):
+    logger.warning('Run %s ignored due to its invalid RCDB parameters.'%run)
     continue
 
   try:
