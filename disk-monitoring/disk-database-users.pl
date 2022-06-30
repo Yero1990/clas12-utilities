@@ -70,6 +70,7 @@ make_query($dbh_db, \$sth);
 #
 $find_dir_command = "find $starting_directory -xdev \\( \\(";
 $find_dir_command .= " -path $starting_directory/.snapshot";
+$find_dir_command .= " -o -path $starting_directory/.zfs";
 $find_dir_command .= " -o -path /work/clas12/rg-a";
 $find_dir_command .= " -o -path /work/clas12/rg-b";
 $find_dir_command .= " -o -path /work/clas12/rg-c";
