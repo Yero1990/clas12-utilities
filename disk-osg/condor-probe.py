@@ -34,6 +34,7 @@ exit_codes = { 202:'cvmfs', 203:'generator', 211:'ls', 204:'gemc', 0:'success/un
 cvmfs_error_strings = [ 'Loaded environment state is inconsistent',
   'Command not found','Unable to access the Singularity image','CVMFS ERROR']
 #  'No such file or directory', 'Transport endpoint is not connected',
+submit_nodes = ['scosg20.jlab.org', 'scosg16.jlab.org', 'scosg2202.jlab.org']
 
 ###########################################################
 ###########################################################
@@ -1094,8 +1095,8 @@ if __name__ == '__main__':
     cli.error('-completed requires -hours is greater than zero or -input.')
 
   if not args.input:
-    if socket.gethostname() != 'scosg20.jlab.org' and socket.gethostname() != 'scosg16.jlab.org':
-      cli.error('You must be on scosg16 unless using the -input option.')
+    if socket.gethostname() not in submit_nodes:
+      cli.error('You must be on an OSG submit node unless using the -input option.')
 
   if len(args.exit) > 0 and not args.parseexit:
     print('Enabling -parseexit to accommodate -exit.  This may be slow ....')
