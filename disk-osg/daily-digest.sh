@@ -1,6 +1,6 @@
 #!/bin/bash
 
-recipients='baltzell@jlab.org ungaro@jlab.org devita@jlab.org'
+recipients='baltzell@jlab.org ungaro@jlab.org devita@jlab.org mckinnon@jlab.org'
 
 dirname="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 
