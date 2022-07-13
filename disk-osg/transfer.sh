@@ -41,13 +41,13 @@
 
 # user@host that should be running this script:
 user=gemc
-localhost=scosg20
+localhost=scosg2202
 
 # path on $localhost to be rsync'd to $dest:
 srcdir=/osgpool/hallb/clas12/gemc
 
 # remote destination for contents of $srcdir:
-remotehost=dtn1902-ib
+remotehost=dtn1902
 remotepath=/lustre19/expphy/volatile/clas12/osg2
 dest=$user@$remotehost:$remotepath
 
