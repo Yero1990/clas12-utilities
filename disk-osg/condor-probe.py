@@ -841,7 +841,7 @@ def make_timeline_entry(args):
 def timeline(args):
   basename = 'timeline.json'
   srcdir = os.getenv('HOME')
-  destdir = 'dtn1902-ib:/lustre19/expphy/volatile/clas12/osg2'
+  destdir = 'dtn1902:/lustre19/expphy/volatile/clas12/osg2'
   srcpath = '%s/%s'%(srcdir,basename)
   destpath = '%s/%s'%(destdir,basename)
   cache = []
