@@ -1,0 +1,5 @@
+
+remove lz4/hipo builds, use whatever's in clas12root instead
+
+add cmake to ubermodule
+
