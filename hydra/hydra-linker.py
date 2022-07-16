@@ -2,7 +2,7 @@
 import re,os,time,glob,datetime
 
 input_dir = '/home/clasrun/CLAS12MON/output'
-output_dir = '/home/baltzell/hydra'
+output_dir = '/local/hydra/input'
 blacklist_file = '/home/baltzell/hydra-blacklist.txt'
 indir_regex = '^clas12mon_(\d+)_(\d+-\d+-\d+_\d+\.\d+\.\d+_[APM]+)$'
 time_format = '%m-%d-%Y_%H.%M.%S_%p'
