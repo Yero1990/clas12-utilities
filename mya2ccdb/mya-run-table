@@ -15,7 +15,6 @@ cli = argparse.ArgumentParser(description='Extract run averages for a PV from My
 cli.add_argument('-start',metavar='RUN# or YYYY-MM-DD_HH:MM:SS',help='start date',type=str,required=True)
 cli.add_argument('-end',metavar='RUN# or YYYY-MM-DD_HH:MM:SS',help='end date',type=str,required=True)
 cli.add_argument('-pv',help='PV name',type=str,required=True)
-cli.add_argument('-v',help='verbose',default=False, action='store_true')
 
 args=cli.parse_args(sys.argv[1:])
 
@@ -23,7 +22,7 @@ db = None
 def get_rcdb_time(run, varname):
   global db
   if db is None:
-    db = rcdb.RCDBProvider(os.getenv('RCDB_CONNECTION'))
+    db = rcdb.RCDBProvider('mysql://rcdb@clasdb.jlab.org/rcdb')
   try:
     return db.get_condition(run, varname).value.strftime('%Y-%m-%d_%H:%M:%S')
   except:
