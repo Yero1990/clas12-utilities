@@ -489,12 +489,12 @@ def condor_plot(args, logscale=0):
   h1ceff_site = {}
   h1att_gen = {}
   h1attq_gen = {}
-  h1eff = ROOT.TH1D('h1eff',';CPU Utilization',100,0,1.5)
-  h2eff = ROOT.TH2D('h2eff',';Wall Hours;CPU Utilization',100,0,20,100,0,1.6)
-  h1ceff = ROOT.TH1D('h1ceff',';Cumulative Efficiency',100,0,1.6)
-  h2ceff = ROOT.TH2D('h2ceff',';Cumulative Wall Hours;Cumulative Efficiency',200,0,40,100,0,1.5)
-  h2att = ROOT.TH2D('h2att',';Job Attempts;Cumulative Efficiency',20,0.5,20.5,100,0,1.5)
-  h1att = ROOT.TH1D('h1att',';Job Attempts',20,0.5,20.5)
+  h1eff = ROOT.TH1D('h1eff',';CPU Utilization',100,0,1.2)
+  h2eff = ROOT.TH2D('h2eff',';Wall Hours;CPU Utilization',100,0,20,100,0,1.2)
+  h1ceff = ROOT.TH1D('h1ceff',';Cumulative Efficiency',100,0,1.2)
+  h2ceff = ROOT.TH2D('h2ceff',';Cumulative Wall Hours;Cumulative Efficiency',200,0,40,100,0,1.2)
+  h2att = ROOT.TH2D('h2att',';Job Attempts;Cumulative Efficiency',16,0.5,16.5,100,0,1.2)
+  h1att = ROOT.TH1D('h1att',';Job Attempts',16,0.5,16.5)
   h1wall = ROOT.TH1D('h1wall',';Wall Hours',100,0,20)
   h1attq = h1att.Clone('h1attq')
   h1attq.GetXaxis().SetTitle('Queued Job Attempts')
@@ -590,7 +590,7 @@ def condor_plot(args, logscale=0):
       generators[gen].append(h1att_gen[gen])
     if gen in h1attq_gen:
       generators[gen].append(h1attq_gen[gen])
-  leg_gen = ROOT.TLegend(0.72,0.95-len(generators)*0.08,0.92,0.95)
+  leg_gen = ROOT.TLegend(0.37,0.95-len(generators)*0.08,0.62,0.95)
   leg_site = ROOT.TLegend(0.11,0.12,0.92,0.95)
   ii=1
   for gen,histos in generators.items():
@@ -617,6 +617,7 @@ def condor_plot(args, logscale=0):
     except:
       pass
   h1att.SetStats(ROOT.kTRUE)
+  h1attq.SetStats(ROOT.kTRUE)
 
   can.cd(1) #####################################
   ROOT.gPad.SetLogy(logscale)

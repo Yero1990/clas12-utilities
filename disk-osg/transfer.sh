@@ -58,7 +58,7 @@ rsync_timeout=5400
 rsync_minutes=60
 
 # files older than this will be deleted from $srcdir:
-delete_days=10
+delete_days=7
 
 # script name and absolute path containing this script:
 scriptname=$(basename $0)
