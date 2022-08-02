@@ -590,7 +590,7 @@ def condor_plot(args, logscale=0):
       generators[gen].append(h1att_gen[gen])
     if gen in h1attq_gen:
       generators[gen].append(h1attq_gen[gen])
-  leg_gen = ROOT.TLegend(0.37,0.95-len(generators)*0.08,0.62,0.95)
+  leg_gen = ROOT.TLegend(0.6,0.95-len(generators)*0.08,0.9,0.95)
   leg_site = ROOT.TLegend(0.11,0.12,0.92,0.95)
   ii=1
   for gen,histos in generators.items():
@@ -656,14 +656,12 @@ def condor_plot(args, logscale=0):
   for ii,gen in enumerate(sorted(h1eff_gen.keys())):
     h1eff_gen[gen].Draw(opt)
     opt = 'SAME'
-  leg_gen.Draw()
   can.cd(10) #####################################
   ROOT.gPad.SetLogy(logscale)
   opt = ''
   for ii,gen in enumerate(sorted(h1ceff_gen.keys())):
     h1ceff_gen[gen].Draw(opt)
     opt = 'SAME'
-  leg_gen.Draw()
   opt = ''
   for ii,site in enumerate(max_sites):
     if ii > 10:
