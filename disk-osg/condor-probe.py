@@ -475,7 +475,7 @@ def condor_plot(args, logscale=0):
   ROOT.gStyle.SetPadGridY(1)
   ROOT.gStyle.SetOptStat('emr')
   ROOT.gStyle.SetStatW(0.3)
-  ROOT.gStyle.SetStatX(0.92)
+  ROOT.gStyle.SetStatX(0.90)
   ROOT.gStyle.SetStatY(0.95)
   ROOT.gStyle.SetHistMinimumZero(ROOT.kTRUE)
   ROOT.gROOT.ForceStyle()
