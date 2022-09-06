@@ -5,6 +5,7 @@ from CcdbUtil import RunRange
 _BEAM_ENERGY_TOLERANCE=10  # MeV
 _BEAM_STOP_THRESHOLD=10
 _RUN_NUMBER_MAX=2E5
+_RUN_NUMBER_MIN=1
 
 #
 # Beam blocker attenuation factor is dependent on beam energy.
@@ -231,6 +232,8 @@ class MyaFcup:
     try:
       self.run = int(myaDatum.getValue('B_DAQ:run_number'))
       if self.run > _RUN_NUMBER_MAX:
+        self.run=None
+      if self.run < _RUN_NUMBER_MIN:
         self.run=None
     except ValueError:
       self.run = None
