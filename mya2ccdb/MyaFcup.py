@@ -134,6 +134,9 @@ _ATTEN={}
 #_ATTEN[2070]=-999   # Run range: 15671-15725, Eb=2.1 GeV, LAr    2022-01-20_20:32:28   2022-01-24_07:19:16  -0.1                            # mya2ccdb.py runs fine
 #                                                                                                         beam blocker OUT   | PASSED
 
+#_ATTEN[2070]= 23.3452 # Run range: 15726, Eb=2.1 GeV, Empty  2022-01-24_08:35:01 2022-01-24_09:06:58 series of beam current for beam blocker calibration. blocker out first.
+_ATTEN[2070]= 23.3452 # Run range: 15727, Eb=2.1 GeV, Empty  2022-01-24_09:10:03 2022-01-24_10:30:11 empty target run 
+
 # ------CY May 19 : Added rgm attenuation factors             ~   start_time(1st run)   end _time(last run)
 # 4 GeV (more precisely, 4029.62 MeV), 
 #_ATTEN[4029]=16.40835  # Run range: 15728-15732, Eb=4 GeV, Empty  2022-01-24_11:31:11  2022-01-24_12:15:05      53                            # mya2ccdb.py runs fine
