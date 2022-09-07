@@ -15,6 +15,7 @@ _RUN_NUMBER_MAX=2E5
 
 _ATTEN={}
 _ATTEN[10604]= 9.8088
+_ATTEN[10547]= 9.1508  # RG-C
 _ATTEN[10409]= 9.6930
 _ATTEN[10405]= 9.6930  # unmeasured during BONuS, copied from 10409
 _ATTEN[10375]= 9.6930  # bogus beam energy from ACC during BONuS
