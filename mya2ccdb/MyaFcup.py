@@ -5,7 +5,7 @@ from CcdbUtil import RunRange
 _BEAM_ENERGY_TOLERANCE=10  # MeV
 _BEAM_STOP_THRESHOLD=10
 _RUN_NUMBER_MAX=2E5
-_RUN_NUMBER_MIN=1
+_RUN_NUMBER_MIN=3E3
 
 #
 # Beam blocker attenuation factor is dependent on beam energy.
@@ -58,7 +58,7 @@ _ATTEN={}
 #                                                                                                      beam blocker OUT (small dip to -0.1)          
 #                                                                                                         "no runs in-between dip" | PASSED
 #
-#_ATTEN[5986]=15.022    # Run range: 15043-15106, Eb=6 GeV, LD2    2021-11-12_17:45:21   2021-11-18_10:37:53      65.732                    # ERROR: File "mya2ccdb.py", line 233, in <module> data=dict(offset,**atten)  TypeError: type object argument after ** must be a mapping, not NoneType
+#_ATTEN[5986]=15.022    # (ERROR FIXED) Run range: 15043-15106, Eb=6 GeV, LD2    2021-11-12_17:45:21   2021-11-18_10:37:53      65.732                    # ERROR: File "mya2ccdb.py", line 233, in <module> data=dict(offset,**atten)  TypeError: type object argument after ** must be a mapping, not NoneType
 #                                                                                                       beam blocker OUT (small dip to -0.1)                                                                                                     
 #                                                                                                         "no runs in-between dip" | PASSED
 #                                                                                                              
@@ -78,7 +78,7 @@ _ATTEN={}
 #                                                                                                         "no runs in-between dips" | PASSED 
 #                                                                                                 
 
-#_ATTEN[5986]=8.183     # Run range: 15318-15328, Eb=6 GeV, Sn     2021-12-05_08:33:38   2021-12-06_07:50:47    65.732                           # ERROR: File "mya2ccdb.py", line 233, in <module> data=dict(offset,**atten)  TypeError: type object argument after ** must be a mapping, not NoneType
+#_ATTEN[5986]=8.183     # (ERROR FIXED) Run range: 15318-15328, Eb=6 GeV, Sn     2021-12-05_08:33:38   2021-12-06_07:50:47    65.732                           # ERROR: File "mya2ccdb.py", line 233, in <module> data=dict(offset,**atten)  TypeError: type object argument after ** must be a mapping, not NoneType
 #                                                                                                       beam blocker OUT (small dip to -0.1)    
 #                                                                                                         "no runs in-between dips" | PASSED 
 #                                                                                                      
@@ -118,7 +118,7 @@ _ATTEN={}
 #                                                                                  "15533 - 15538 no beam",  "15540 - 15565 had beam, and beam blocker OUT"
 #                                                                              "Mya plot beam_stop is consistent with mya2ccdb.py output", see rgm_15533_15565/output.txt             
 #                                                                                             
-#_ATTEN[2070]=-999   # Run range: 15566-15627, Eb=2.1 GeV, LD2    2022-01-13_12:28:32   2022-01-16_17:57:42    beam blocker OUT (-0.1) | PASSED  | # ERROR: File "mya2ccdb.py", line 233, in <module> data=dict(offset,**atten)  TypeError: type object argument after ** must be a mapping, not NoneType
+#_ATTEN[2070]=-999   # (ERROR FIXED) Run range: 15566-15627, Eb=2.1 GeV, LD2    2022-01-13_12:28:32   2022-01-16_17:57:42    beam blocker OUT (-0.1) | PASSED  | # ERROR: File "mya2ccdb.py", line 233, in <module> data=dict(offset,**atten)  TypeError: type object argument after ** must be a mapping, not NoneType
 #                                                                                                       ("need to fix bug in code, but everything else is fine")
 
 #_ATTEN[2070]=-999   # Run range: 15628-15636, Eb=2.1 GeV, LH2    2022-01-16_23:16:03   2022-01-17_11:27:56     beam blocker OUT (-0.1) | PASSED                            # mya2ccdb.py runs fine
@@ -139,12 +139,12 @@ _ATTEN={}
 #_ATTEN[4029]=16.40835  # Run range: 15728-15732, Eb=4 GeV, Empty  2022-01-24_11:31:11  2022-01-24_12:15:05      53                            # mya2ccdb.py runs fine
 #                                                                                                          beam blocker IN   | PASSED
 
-#_ATTEN[4029]=11.6961   # Run range: 15733,       Eb=4 GeV, C      2022-01-24_17:09:54  2022-01-24_18:15:47      53->-0.1 (@ 18:00)             # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range
+#_ATTEN[4029]=11.6961   # (ERROR FIXED) Run range: 15733,       Eb=4 GeV, C      2022-01-24_17:09:54  2022-01-24_18:15:47      53->-0.1 (@ 18:00)             # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range
 #                                                                                                 run 15733 was still on-going: 17:09 - 18:15
 #                                                                                                           "beam blocker OUT : 18:00 - 18:14"| run 15733 is a beam blocker calibration run SO WILL never be part of production | PASSED
 #                                                                                                  
 
-#_ATTEN[4029]=4.2662    # Run range: 15734,       Eb=4 GeV, LAr    2022-01-24_18:23:22  2022-01-24_22:20:02      53                            # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range
+#_ATTEN[4029]=4.2662    # (ERROR FIXED) Run range: 15734,       Eb=4 GeV, LAr    2022-01-24_18:23:22  2022-01-24_22:20:02      53                            # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range
 #                                                                                                    beam blocker IN  
 #                                                                                     "need to fix bug before this run can be checked" | 15734 IS A JUNK RUN | PASSED
 
@@ -162,7 +162,7 @@ _ATTEN={}
 #_ATTEN[4029]=11.6961   # Run range: 15766-15775, Eb=4 GeV, C      2022-01-29_22:42:08  2022-01-30_13:30:35      53                            # mya2ccdb.py runs fine
 #                                                                                                          beam blocker IN   | PASSED
 
-#_ATTEN[4029]=16.40835  # Run range: 15777,       Eb=4 GeV, Empty  2022-01-30_16:06:04  2022-01-30_18:04:04      53                            # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range
+#_ATTEN[4029]=16.40835  # (ERROR FIXED) Run range: 15777,       Eb=4 GeV, Empty  2022-01-30_16:06:04  2022-01-30_18:04:04      53                            # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range
 #                                                                                                          beam blocker IN   | need to fix bug first, but PASSED
 
 #_ATTEN[4029]=11.6961   # Run range: 15778-15784, Eb=4 GeV, C      2022-01-30_18:10:51  2022-01-31_08:22:00      53                            # mya2ccdb.py runs fine
@@ -181,7 +181,7 @@ _ATTEN={}
 #_ATTEN[5986]=-999  # Run range: 15789-15802, Eb=6 GeV, LAr    2022-01-31_15:49:30   2022-02-01_19:58:52     -0.1                                # mya2ccdb.py runs fine
 #                                                                                                          beam blocker OUT   | PASSED
 
-#_ATTEN[5986]=15.95795  # Run range: 15803,       Eb=6 GeV, Empty  2022-02-01_20:28:52   2022-02-01_21:28:59      53                           # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range            
+#_ATTEN[5986]=15.95795  # (ERROR FIXED) Run range: 15803,       Eb=6 GeV, Empty  2022-02-01_20:28:52   2022-02-01_21:28:59      53                           # ERROR:  File "mya2ccdb.py", line 198, in <module> offsets[len(offsets)-1].runMax=None IndexError: list index out of range            
 #                                                                                                          beam blocker IN   | need to fix bug first, but PASSED
 
 #_ATTEN[5986]=10.1932   # Run range: 15804-15827, Eb=6 GeV, Sn     2022-02-01_22:02:25   2022-02-03_07:30:43      53                           # mya2ccdb.py runs fine

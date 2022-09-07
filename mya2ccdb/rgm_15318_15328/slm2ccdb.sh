@@ -1,0 +1,11 @@
+ccdb -c mysql://clas12writer:geom3try@clasdb/clas12 add runcontrol/slm -r 15312-15317 slm_15312-15317.txt
+ccdb -c mysql://clas12writer:geom3try@clasdb/clas12 add runcontrol/slm -r 15318-15318 slm_15318-15318.txt
+ccdb -c mysql://clas12writer:geom3try@clasdb/clas12 add runcontrol/slm -r 15319-15319 slm_15319-15319.txt
+ccdb -c mysql://clas12writer:geom3try@clasdb/clas12 add runcontrol/slm -r 15320-15320 slm_15320-15320.txt
+ccdb -c mysql://clas12writer:geom3try@clasdb/clas12 add runcontrol/slm -r 15321-15321 slm_15321-15321.txt
+ccdb -c mysql://clas12writer:geom3try@clasdb/clas12 add runcontrol/slm -r 15322-15322 slm_15322-15322.txt
+ccdb -c mysql://clas12writer:geom3try@clasdb/clas12 add runcontrol/slm -r 15323-15323 slm_15323-15323.txt
+ccdb -c mysql://clas12writer:geom3try@clasdb/clas12 add runcontrol/slm -r 15324-15324 slm_15324-15324.txt
+ccdb -c mysql://clas12writer:geom3try@clasdb/clas12 add runcontrol/slm -r 15325-15325 slm_15325-15325.txt
+ccdb -c mysql://clas12writer:geom3try@clasdb/clas12 add runcontrol/slm -r 15326-15326 slm_15326-15326.txt
+ccdb -c mysql://clas12writer:geom3try@clasdb/clas12 add runcontrol/slm -r 15327- slm_15327-None.txt
